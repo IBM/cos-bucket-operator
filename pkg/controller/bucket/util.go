@@ -60,6 +60,7 @@ type Object struct {
 	Key string `xml:"Key"`
 }
 
+//Endpoints is use to get the endpoint base on location and resilience
 type Endpoints struct {
 	IdentifyEndpoints struct {
 		IAMToken  string `json:"iam_token"`
@@ -72,6 +73,7 @@ type Endpoints struct {
 	} `json:"service-endpoints"`
 }
 
+// KeyVal is used to keep KeyVal of needed info
 type KeyVal struct {
 	Name  string
 	Value string
@@ -101,24 +103,23 @@ func (r *ReconcileBucket) getIamToken(secretnamespace string, apiKey *keyvalue.K
 			return "", fmt.Errorf("No such key:%s defined in ConfigMap:%s", apiKey.ConfigMapKeyRef.Key, apiKey.ConfigMapKeyRef.Name)
 		}
 		return ondemandAuthenticate(apiKeyVal, regionStr)
-	} else {
-		secret := &corev1.Secret{}
+	}
+	secret := &corev1.Secret{}
 
-		if err := r.Get(context.Background(), types.NamespacedName{Name: secretName, Namespace: secretnamespace}, secret); err != nil {
-			if secretnamespace != "default" {
-				if err := r.Get(context.Background(), types.NamespacedName{Namespace: "default", Name: secretName}, secret); err != nil {
-					return "", err
-				}
-			} else {
+	if err := r.Get(context.Background(), types.NamespacedName{Name: secretName, Namespace: secretnamespace}, secret); err != nil {
+		if secretnamespace != "default" {
+			if err := r.Get(context.Background(), types.NamespacedName{Namespace: "default", Name: secretName}, secret); err != nil {
 				return "", err
 			}
+		} else {
+			return "", err
 		}
-
-		if time.Now().Sub(secret.GetCreationTimestamp().Time).Minutes() > 5 {
-			return r.ondemandGetToken(secretnamespace, apiKey)
-		}
-		return string(secret.Data["access_token"]), nil
 	}
+
+	if time.Now().Sub(secret.GetCreationTimestamp().Time).Minutes() > 5 {
+		return r.ondemandGetToken(secretnamespace, apiKey)
+	}
+	return string(secret.Data["access_token"]), nil
 
 }
 
@@ -181,6 +182,7 @@ func ondemandAuthenticate(apiKeyVal string, region string) (string, error) {
 }
 
 func retrieveCredentials(credentials []KeyVal) (string, string, error) {
+
 	resourceInstanceID := ""
 	endpoints := ""
 
@@ -202,13 +204,13 @@ func retrieveCredentials(credentials []KeyVal) (string, string, error) {
 	} else if endpoints == "" {
 		return resourceInstanceID, endpoints, fmt.Errorf("Missing credentials: Endpoints")
 	}
+
 	return resourceInstanceID, endpoints, nil
 }
 func (r *ReconcileBucket) processCredentials(bucket *ibmcloudv1alpha1.Bucket) ([]KeyVal, *ibmcloudoperator.Service, bool, error) {
-
+	var err error
 	var bindingKeyValues []KeyVal
 	var serviceObj *ibmcloudoperator.Service
-	// var apiKeyVal = ""
 	var resourceInstanceIDVal = ""
 	var endpointsVal = ""
 
@@ -220,46 +222,52 @@ func (r *ReconcileBucket) processCredentials(bucket *ibmcloudv1alpha1.Bucket) ([
 		if err != nil {
 			log.Info("Unable to find", "BindingObject", bucket.Spec.BindingFrom.Name)
 			if strings.Contains(bucket.Status.Message, "not found") && bucket.Status.State != resv1.ResourceStateWaiting {
-				wlocker.QueueInstance(bucket, bucket.Spec.BindingFrom.Name)
+				wlocker.queueInstance(bucket, bucket.Spec.BindingFrom.Name)
 				return bindingKeyValues, nil, false, err // Dont retry, the watcher will watch for the creation of BindingObject, set for PingInterval
 			}
 			return bindingKeyValues, nil, true, err // Binding Object is not ready yet, retry in retryInterval
 		}
-		wlocker.DeQueueInstance(bucket, bucket.Spec.BindingFrom.Name)
+		wlocker.deQueueInstance(bucket, bucket.Spec.BindingFrom.Name)
 		secret, err := ibmcloudcomm.GetSecret(r, bindingObject)
-		// log.Info("Location secret", "secret", secret.Data)
-		// log.Info("Finding ", "Key", bucket.Spec.Credentials.BindingRef.Keys)
 		serviceObj, _ = r.getServiceInstance(bindingObject)
-		// apiKeyVal = string(secret.Data["apikey"])
 		resourceInstanceIDVal = string(secret.Data["resource_instance_id"])
 
 		endpointsVal = string(secret.Data["endpoints"])
 	}
 
-	//if !reflect.DeepEqual(bucket.Spec.APIKey, ibmcloudv1alpha1.ParametersFromSource{}) {
-	/* if bucket.Spec.APIKey != nil {
-		apiKeyVal, _ = r.getFromKeyReference(*bucket.Spec.APIKey, bucket.ObjectMeta.Namespace, apiKeyVal)
-	}
-	*/
-
 	if bucket.Spec.ResourceInstanceID != nil {
-		// if !reflect.DeepEqual(bucket.Spec.ResourceInstanceID, ibmcloudv1alpha1.ParametersFromSource{}) {
-		resourceInstanceIDVal, _ = r.getFromKeyReference(*bucket.Spec.ResourceInstanceID, bucket.ObjectMeta.Namespace, resourceInstanceIDVal)
+		resourceInstanceIDVal, err = r.getFromKeyReference(*bucket.Spec.ResourceInstanceID, bucket.ObjectMeta.Namespace, resourceInstanceIDVal)
+		if err != nil {
+			return bindingKeyValues, nil, true, fmt.Errorf("ResourceInstanceID Spec missing")
+		}
 	}
 
 	if bucket.Spec.Endpoints != nil {
-		// if !reflect.DeepEqual(bucket.Spec.Endpoints, ibmcloudv1alpha1.ParametersFromSource{}) {
-		endpointsVal, _ = r.getFromKeyReference(*bucket.Spec.Endpoints, bucket.ObjectMeta.Namespace, endpointsVal)
-	}
-	/* if apiKeyVal != "" {
-		apiKey := KeyVal{
-			Name:  "apikey",
-			Value: apiKeyVal,
+		endpointsVal, err = r.getFromKeyReference(*bucket.Spec.Endpoints, bucket.ObjectMeta.Namespace, endpointsVal)
+		if err != nil {
+			return bindingKeyValues, nil, true, fmt.Errorf("Endpoints Spec missing")
 		}
-		bindingKeyValues = append(bindingKeyValues, apiKey)
-	}  */
+	}
+
 	if strings.Contains(resourceInstanceIDVal, "::") {
 		resourceInstanceIDVal = getGUID(resourceInstanceIDVal)
+	}
+
+	anno := bucket.GetObjectMeta().GetAnnotations()
+	if anno["cred_ResourceInstanceID"] == "" || anno["cred_Endpoints"] == "" {
+		anno["cred_ResourceInstanceID"] = resourceInstanceIDVal
+		anno["cred_Endpoints"] = endpointsVal
+		bucket.GetObjectMeta().SetAnnotations(anno)
+		log.Info(bucket.ObjectMeta.Name, "Setup Annotation", anno)
+		if err := r.Update(context.Background(), bucket); err != nil {
+			return bindingKeyValues, nil, false, err
+		}
+	}
+	if anno != nil && anno["cred_ResourceInstanceID"] != resourceInstanceIDVal {
+		return bindingKeyValues, nil, true, fmt.Errorf("ResourceInstanceID changed: Original ID is %s, New ID is %s", anno["cred_ResourceInstanceID"], resourceInstanceIDVal)
+	}
+	if anno != nil && anno["cred_Endpoints"] != endpointsVal {
+		return bindingKeyValues, nil, true, fmt.Errorf("Endpoints changed: Original Endpoints is %s, New Endpoints is %s", anno["cred_Endpoints"], endpointsVal)
 	}
 
 	if resourceInstanceIDVal != "" {
@@ -327,14 +335,14 @@ func (r *ReconcileBucket) getBindingObject(bindingObjectName string, bucketNameS
 	}
 	return binding, nil
 }
-func (r *ReconcileBucket) dyncGetEndpointUrl(bucket *ibmcloudv1alpha1.Bucket, endpoints string, token string) error {
+func (r *ReconcileBucket) dyncGetEndpointURL(bucket *ibmcloudv1alpha1.Bucket, endpoints string, token string) error {
 	anno := bucket.GetObjectMeta().GetAnnotations()
 	if anno != nil && anno["EndpointURL"] != "" {
 		return nil
 	}
 
 	endpointsInfo := getEndpointInfo(bucket, endpoints, token)
-	log.Info(bucket.GetObjectMeta().GetName(), "dyncGetEndpointUrl:endpointsInfo", endpointsInfo)
+	log.Info(bucket.GetObjectMeta().GetName(), "dyncGetEndpointURL:endpointsInfo", endpointsInfo)
 
 	var resiliency string
 	var location string
@@ -398,12 +406,12 @@ func dyncGetEndpoint(location string, buckettype string, endpoints map[string]in
 				publics := infos["private"].(map[string]interface{})
 				str := fmt.Sprintf("%v", publics[location])
 				return str, nil
-			} else {
-				publics := infos["public"].(map[string]interface{})
-				log.Info("", "Public", publics)
-				str := fmt.Sprintf("%v", publics[location])
-				return str, nil
 			}
+			publics := infos["public"].(map[string]interface{})
+			log.Info("", "Public", publics)
+			str := fmt.Sprintf("%v", publics[location])
+			return str, nil
+
 		}
 	}
 	return "", fmt.Errorf("Cannot find endpoints")
@@ -531,11 +539,11 @@ func getStorageClassSpec(bucket *ibmcloudv1alpha1.Bucket) bytes.Buffer {
 	return out
 }
 
-func (l *WaitQLock) QueueInstance(instance *ibmcloudv1alpha1.Bucket, secretName string) {
+func (l *WaitQLock) queueInstance(instance *ibmcloudv1alpha1.Bucket, secretName string) {
 	l.Lock()
 	defer l.Unlock()
 	var repeat = false
-	log.Info("QueueInstance", "namespace", instance.GetNamespace(), "name", instance.GetName(), "waitfor", secretName)
+	log.Info("queueInstance", "namespace", instance.GetNamespace(), "name", instance.GetName(), "waitfor", secretName)
 
 	for _, n := range l.waitBuckets {
 		log.Info("==>", "namespace", instance.GetNamespace(), "name", instance.GetName(), "waitfor", secretName)
@@ -543,7 +551,7 @@ func (l *WaitQLock) QueueInstance(instance *ibmcloudv1alpha1.Bucket, secretName 
 		if n.namespace == instance.GetNamespace() && n.name == instance.GetName() && n.waitfor == secretName {
 
 			repeat = true
-			log.Info("QueueInstance", "repeat", repeat)
+			log.Info("queueInstance", "repeat", repeat)
 		}
 	}
 	if !repeat {
@@ -551,7 +559,7 @@ func (l *WaitQLock) QueueInstance(instance *ibmcloudv1alpha1.Bucket, secretName 
 	}
 }
 
-func (l *WaitQLock) DeQueueInstance(instance *ibmcloudv1alpha1.Bucket, secretName string) {
+func (l *WaitQLock) deQueueInstance(instance *ibmcloudv1alpha1.Bucket, secretName string) {
 	l.Lock()
 	defer l.Unlock()
 	filteredQueue := l.waitBuckets[:0]
@@ -575,10 +583,10 @@ func getGUID(instanceID string) string {
 
 const charset = "abcdefghijklmnopqrstuvwxyz"
 
-var seededRand *rand.Rand = rand.New(
+var seededRand = rand.New(
 	rand.NewSource(time.Now().UnixNano()))
 
-func RandStringWithCharset(length int, charset string) string {
+func randStringWithCharset(length int, charset string) string {
 	b := make([]byte, length)
 	for i := range b {
 		b[i] = charset[seededRand.Intn(len(charset))]
@@ -586,15 +594,15 @@ func RandStringWithCharset(length int, charset string) string {
 	return string(b)
 }
 
-func RandString(length int) string {
-	return RandStringWithCharset(length, charset)
+func randString(length int) string {
+	return randStringWithCharset(length, charset)
 }
 
 func logRecorder(bucket *ibmcloudv1alpha1.Bucket, keysAndValues ...interface{}) {
 	log.Info(bucket.ObjectMeta.Name, "info", keysAndValues)
 }
 
-func CheckCORS(bucket *ibmcloudv1alpha1.Bucket) bool {
+func checkCORS(bucket *ibmcloudv1alpha1.Bucket) bool {
 	annos := bucket.GetObjectMeta().GetAnnotations()
 	oldCorsInfo := ibmcloudv1alpha1.CORSRule{}
 	err := json.Unmarshal([]byte(annos["OrigCORSRule"]), &oldCorsInfo)
@@ -619,7 +627,7 @@ func CheckCORS(bucket *ibmcloudv1alpha1.Bucket) bool {
 }
 
 // CheckRetentionPolicy make sure the retention policy has changed
-func CheckRetentionPolicy(bucket *ibmcloudv1alpha1.Bucket) bool {
+func checkRetentionPolicy(bucket *ibmcloudv1alpha1.Bucket) bool {
 	annos := bucket.GetObjectMeta().GetAnnotations()
 	oldRetentionPolicy := ibmcloudv1alpha1.RetentionPolicy{}
 	err := json.Unmarshal([]byte(annos["OrigRetentionPolicy"]), &oldRetentionPolicy)

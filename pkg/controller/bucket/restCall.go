@@ -20,7 +20,7 @@ import (
 	ibmcloudv1alpha1 "github.com/ibm/cos-bucket-operator/pkg/apis/ibmcloud/v1alpha1"
 )
 
-func (r *ReconcileBucket) updateBucket(bucket *ibmcloudv1alpha1.Bucket, token string, serverInstanceID string, checkExistOnly bool) (bool, error, string) {
+func (r *ReconcileBucket) updateBucket(bucket *ibmcloudv1alpha1.Bucket, token string, serverInstanceID string, checkExistOnly bool) (bool, string, error) {
 	retnMessage := ""
 	statusChange := false
 	urlPrefix, _ := getEndpointURL(bucket) // bucket.Spec.Resiliency, bucket.Spec.Location, bucket.Spec.BucketType)
@@ -53,18 +53,18 @@ func (r *ReconcileBucket) updateBucket(bucket *ibmcloudv1alpha1.Bucket, token st
 	raw, err := restClient.Do(req)
 	if err != nil {
 		log.Info("Rest Call return ", "error", err)
-		return statusChange, err, retnMessage
+		return statusChange, retnMessage, err
 	}
 	log.Info("Create Bucket return ", "StatusCode", raw.StatusCode)
 	if raw.StatusCode != 200 {
 		log.Info("Create Bucket return ", "error", raw.Body)
 		if raw.StatusCode == 409 {
 			// removeBucket(context.Background(), bucket, urlPrefix, token)
-			return true, fmt.Errorf("This bucket name already exists in IBM Cloud Object Storage. Retrying ...."), retnMessage
+			return true, retnMessage, fmt.Errorf("This bucket name already exists in IBM Cloud Object Storage. Retrying")
 		} else if raw.StatusCode == 404 && checkExistOnly {
-			return true, fmt.Errorf("This bucket: %s does not exists", bucket.GetObjectMeta().GetAnnotations()["BucketName"]), retnMessage
+			return true, retnMessage, fmt.Errorf("This bucket: %s does not exists", bucket.GetObjectMeta().GetAnnotations()["BucketName"])
 		}
-		return statusChange, err, retnMessage
+		return statusChange, retnMessage, err
 	}
 	if checkExistOnly {
 		log.Info("Bucket exists", "name", bucket.GetObjectMeta().GetAnnotations()["BucketName"])
@@ -76,16 +76,16 @@ func (r *ReconcileBucket) updateBucket(bucket *ibmcloudv1alpha1.Bucket, token st
 			log.Info("checkBindingDefault", "cors", corsChanged, "retention", retentionChanged)
 
 		}
-		if CheckCORS(bucket) || corsChanged {
+		if checkCORS(bucket) || corsChanged {
 			log.Info("CorsRule had changed")
 			accessCorsRule(bucket, instanceid, urlPrefix, token, "PUT", ibmcloudv1alpha1.CORSRule{})
 			updateAnnotation = true
 		}
 
-		if CheckRetentionPolicy(bucket) || retentionChanged {
+		if checkRetentionPolicy(bucket) || retentionChanged {
 			log.Info("Retention Policy had changed")
 
-			retErr, _ := accessRetentionPolicy(bucket, instanceid, urlPrefix, token, "PUT")
+			_, retErr := accessRetentionPolicy(bucket, instanceid, urlPrefix, token, "PUT")
 			if retErr != nil {
 				log.Info("CreateRetention", "error", retErr)
 				retnMessage = retErr.Error()
@@ -97,11 +97,11 @@ func (r *ReconcileBucket) updateBucket(bucket *ibmcloudv1alpha1.Bucket, token st
 		if updateAnnotation {
 			r.updateAnnotations(bucket, serverInstanceID)
 		}
-		return statusChange, nil, retnMessage
+		return statusChange, retnMessage, nil
 	}
 	log.Info("Done creating", "bucketName is ", bucket.GetObjectMeta().GetAnnotations()["BucketName"])
-	corsErr, _ := accessCorsRule(bucket, instanceid, urlPrefix, token, "PUT", ibmcloudv1alpha1.CORSRule{})
-	retErr, _ := accessRetentionPolicy(bucket, instanceid, urlPrefix, token, "PUT")
+	_, corsErr := accessCorsRule(bucket, instanceid, urlPrefix, token, "PUT", ibmcloudv1alpha1.CORSRule{})
+	_, retErr := accessRetentionPolicy(bucket, instanceid, urlPrefix, token, "PUT")
 	if corsErr != nil || retErr != nil {
 		errMsg := ""
 		if corsErr == nil {
@@ -112,12 +112,12 @@ func (r *ReconcileBucket) updateBucket(bucket *ibmcloudv1alpha1.Bucket, token st
 			errMsg = corsErr.Error() + "; " + retErr.Error()
 		}
 
-		return statusChange, nil, errMsg
+		return statusChange, errMsg, nil
 	}
-	return statusChange, nil, retnMessage
+	return statusChange, retnMessage, nil
 }
 
-func accessCorsRule(bucket *ibmcloudv1alpha1.Bucket, instanceid string, urlPrefix string, token string, method string, _restoreCorsRule ibmcloudv1alpha1.CORSRule) (error, ibmcloudv1alpha1.CORSRule) {
+func accessCorsRule(bucket *ibmcloudv1alpha1.Bucket, instanceid string, urlPrefix string, token string, method string, _restoreCorsRule ibmcloudv1alpha1.CORSRule) (ibmcloudv1alpha1.CORSRule, error) {
 	// Method: PUT https://<bucket endpoint>/<bucketname>?cors=ibmcloudv1alpha1
 	inputRules := &_restoreCorsRule
 	if reflect.DeepEqual(_restoreCorsRule, ibmcloudv1alpha1.CORSRule{}) {
@@ -125,9 +125,7 @@ func accessCorsRule(bucket *ibmcloudv1alpha1.Bucket, instanceid string, urlPrefi
 	}
 
 	_corsRule := &ConfigCORSRule{AllowedHeader: inputRules.AllowedHeader, AllowedOrigin: inputRules.AllowedOrigin, AllowedMethod: inputRules.AllowedMethods}
-	/* corsconfiguration.ConfigCORSRule.AllowedOrigin = inputRuls.AllowedOrigin
-	corsconfiguration.ConfigCORSRule.AllowedHeader = inputRuls.AllowedHeader
-	corsconfiguration.ConfigCORSRule.AllowedMethods = inputRuls.AllowedMethods */
+
 	corsconfiguration := &CORSConfiguration{CORSRule: *_corsRule}
 	log.Info("", "configuration", corsconfiguration)
 	xmlBlob, _ := xml.Marshal(corsconfiguration)
@@ -157,14 +155,14 @@ func accessCorsRule(bucket *ibmcloudv1alpha1.Bucket, instanceid string, urlPrefi
 	if method == "PUT" {
 		if err2 != nil {
 			log.Info("Rest Call return ", "error", err2)
-			return err2, ibmcloudv1alpha1.CORSRule{}
+			return ibmcloudv1alpha1.CORSRule{}, err2
 		}
-		return nil, ibmcloudv1alpha1.CORSRule{}
+		return ibmcloudv1alpha1.CORSRule{}, nil
 	}
 	if err2 == nil {
 		currentCORS := ibmcloudv1alpha1.CORSRule{}
 		if res.StatusCode == 404 {
-			return nil, currentCORS
+			return currentCORS, nil
 		}
 		corsConfiguration := CORSConfiguration{}
 		body, _ := ioutil.ReadAll(res.Body)
@@ -173,18 +171,18 @@ func accessCorsRule(bucket *ibmcloudv1alpha1.Bucket, instanceid string, urlPrefi
 		currentCORS.AllowedHeader = corsConfiguration.CORSRule.AllowedHeader
 		currentCORS.AllowedMethods = corsConfiguration.CORSRule.AllowedMethod
 		currentCORS.AllowedOrigin = corsConfiguration.CORSRule.AllowedOrigin
-		return nil, currentCORS
+		return currentCORS, nil
 	}
-	return err2, ibmcloudv1alpha1.CORSRule{}
+	return ibmcloudv1alpha1.CORSRule{}, err2
 }
 
-func accessRetentionPolicy(bucket *ibmcloudv1alpha1.Bucket, instanceid string, urlPrefix string, token string, method string) (error, ibmcloudv1alpha1.RetentionPolicy) {
+func accessRetentionPolicy(bucket *ibmcloudv1alpha1.Bucket, instanceid string, urlPrefix string, token string, method string) (ibmcloudv1alpha1.RetentionPolicy, error) {
 
 	// Method: PUT https://<bucket endpoint>/<bucketname>?cors=
 	retentionPolicy := &bucket.Spec.RetentionPolicy
 	if retentionPolicy.DefaultRetentionDay > retentionPolicy.MaximumRetentionDay ||
 		retentionPolicy.DefaultRetentionDay < retentionPolicy.MinimumRetentionDay {
-		return fmt.Errorf("Default Retention value must be between Maximum and Minimum Retention"), ibmcloudv1alpha1.RetentionPolicy{}
+		return ibmcloudv1alpha1.RetentionPolicy{}, fmt.Errorf("Default Retention value must be between Maximum and Minimum Retention")
 	}
 
 	_maxRetentionDay := &RetentionDay{Days: retentionPolicy.MaximumRetentionDay}
@@ -220,14 +218,14 @@ func accessRetentionPolicy(bucket *ibmcloudv1alpha1.Bucket, instanceid string, u
 	if method == "PUT" {
 		if err2 != nil {
 			log.Info("Rest Call return ", "error", err2)
-			return err2, ibmcloudv1alpha1.RetentionPolicy{}
+			return ibmcloudv1alpha1.RetentionPolicy{}, err2
 		}
-		return nil, ibmcloudv1alpha1.RetentionPolicy{}
+		return ibmcloudv1alpha1.RetentionPolicy{}, nil
 	}
 	if err2 == nil {
 		currentretPolicy := ibmcloudv1alpha1.RetentionPolicy{}
 		if rst.StatusCode == 404 {
-			return nil, currentretPolicy
+			return currentretPolicy, nil
 		}
 		protectionConfiguration := ProtectionConfiguration{}
 		body, _ := ioutil.ReadAll(rst.Body)
@@ -236,9 +234,9 @@ func accessRetentionPolicy(bucket *ibmcloudv1alpha1.Bucket, instanceid string, u
 		currentretPolicy.MinimumRetentionDay = protectionConfiguration.MinimumRetention.Days
 		currentretPolicy.MaximumRetentionDay = protectionConfiguration.MaximumRetention.Days
 		currentretPolicy.DefaultRetentionDay = protectionConfiguration.DefaultRetention.Days
-		return nil, currentretPolicy
+		return currentretPolicy, nil
 	}
-	return nil, ibmcloudv1alpha1.RetentionPolicy{}
+	return ibmcloudv1alpha1.RetentionPolicy{}, nil
 }
 
 func removeBucket(context context.Context, bucket *ibmcloudv1alpha1.Bucket, urlPrefix string, token string) error {
