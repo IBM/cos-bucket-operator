@@ -22,11 +22,11 @@ kind: Bucket
     ```
 
 * Bucket operator can be used independent of the [IBM Cloud Operators](https://github.com/ibm/cloud-operators). 
-  * Using Binding object: Please reference to the IBM Cloud Operators](https://github.com/ibm/cloud-operators) for installation detail and please see the [sample service and binding yaml](#sampleYaml).
+  * Using Binding object: Please reference to the [IBM Cloud Operators](https://github.com/ibm/cloud-operators) for installation detail and please see the [sample service and binding yaml](#sampleYaml).
   * To use bucket operator independently, user needs to provide the following information thru kubernetes secrets or configmap. (see [section 2](#section2) for schema information)
     1. apiKey
 
-        a. use the installtaion script 
+        a. use the installation script 
             ```
             curl -sL https://raw.githubusercontent.com/IBM/cos-bucket-operator/master/hack/install-bucket-operator.sh | bash 
             ```
@@ -47,7 +47,7 @@ kind: Bucket
 
 * If the bucket was removed outside of the Lifecycle of the controller, the bucket will be created with name plus different random strings at the end
 * Object inside Bucket will be removed when the deleting the controller, KeepIfNotEmpty flag can be used to avoid accidentally removing of non-empty bucket. With this flag, the Deleting action will fail and will stay in "Deleting" status, until user manual remove the object(s) inside the bucket. Or remove the KeepIfNotEmpty flag from the yaml spec and use `kubectl apply` to change the desired action.
-* The location, resilency cannot be changed without removing and recreating the bucket.
+* The location, resiliency cannot be changed without removing and recreating the bucket.
 * The CORS rules and RetentionPolicy can be changed by using "kubectl apply"
 * `bindOnly` is used to bind to existing bucket. You can also use this to change the cors rule and retention policy of existing bucket. Removing the binconly CR will not remove the bucket, but the original CORS rule and Policy will be restored. `Note: Once you create a retention policy it can not be deleted.` To understand the `Retention Policy`, please reference [Immutable Object Storage](https://cloud.ibm.com/docs/services/cloud-object-storage/basics?topic=cloud-object-storage-immutable)  
 
@@ -56,7 +56,7 @@ kind: Bucket
 
 The Credentials field inside Spec should contains three needed information about where to retrieve the values of `resource_instance_id`, `apikey`, and `endpoints`.
 If no keys is defined in the spec of either bindingRef, secretKeyRef or configMapKeyRef, then the operators will try to find all 3 values from it.
-If there are duplicate key specified for more than one Ref, the the latter one will overwrite the value in the previous one. The sequence is configMapRef > secretKeyRef > bindingRef. 
+If there are duplicate key specified for more than one Ref, the latter one will overwrite the value in the previous one. The sequence is configMapRef > secretKeyRef > bindingRef. 
 ```
 apiVersion: ibmcloud.ibm.com/v1beta1
 kind: Bucket
@@ -180,7 +180,7 @@ spec:
 
 ```
 
-###  <a name="section3"></a>3. How to create Cloud Object Storage Credentails using IBM Cloud Cli
+###  <a name="section3"></a>3. How to create Cloud Object Storage Credentials using IBM Cloud Cli
 
 1. Login to IBM Cloud using ibmcloud login
 
@@ -191,7 +191,7 @@ spec:
 ```
 3. Using Secret
 
-    A. Retrieve the Credential, and generate the base64 encoded file ( Note: credential_name is from step 1). After the command, you can check if the file /tmp/mySecret.secrets is created.
+    A. Retrieve the Credential, and generate the base64 encoded file (Note: credential_name is from step 1). After the command, you can check if the file `/tmp/mySecret.secrets` is created.
 
     ```
       ibmcloud resource service-key <credential_name> | 
@@ -227,7 +227,7 @@ spec:
 kubectl get secret <kubernete_secret_name> -o yaml
 ```
 
-For Example, the data field should look like the following ( should contains at least apikey, endpoints and resource_instance_id)
+For Example, the data field should look like the following (should contains at least apikey, endpoints and resource_instance_id)
 ```
 data:
   apikey: c29tZSByYW5kb20gYXBpa2V5IGdlbmVyYXRlZCBieSB5b3UK
