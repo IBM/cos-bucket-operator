@@ -219,32 +219,16 @@ func (r *ReconcileBucket) Reconcile(request reconcile.Request) (reconcile.Result
 			return reconcile.Result{}, err
 		}
 	}
+
+	// Get IAM Token : if apiKey is not specified in the Spec, get it from the default place seed-secret-tokens,
+	//                 if seed-secret-tokens is last updated more than 15 mins ago, use seed-secret instead
 	token, err := r.getIamToken(instance.ObjectMeta.Namespace, instance.Spec.APIKey, instance.Spec.Region)
 
 	if err != nil || token == "" {
 		return r.updateStatus(instance, resv1.ResourceStateRetrying, fmt.Errorf("Retry getting ibm cloud api key"), true)
 	}
-	if !r.isValidChange(instance) && instance.ObjectMeta.DeletionTimestamp.IsZero() {
-		return r.updateStatus(instance, "Update Failed", fmt.Errorf("bindingFrom, Resiliency, Location, BucketType and StorageClass are immutable"), false)
-	}
-	r.setDefault(instance, token)
-	credentials, parentObj, retry, err := r.processCredentials(instance)
-	if err != nil && instance.ObjectMeta.DeletionTimestamp.IsZero() {
-		log.Info("ProcessCredentials", "error", err)
-		if instance.Status.State == resv1.ResourceStateOnline || instance.Status.State == resv1.ResourceStateUnknown {
-			return r.updateStatus(instance, resv1.ResourceStateUnknown, err, retry)
-		}
-		return r.updateStatus(instance, resv1.ResourceStateWaiting, err, retry)
-	}
-	log.Info("Credentials", "get", credentials)
-	resourceInstanceID, endpoints, err := retrieveCredentials(credentials)
-	if err != nil && instance.ObjectMeta.DeletionTimestamp.IsZero() {
-		if instance.Status.State == resv1.ResourceStateOnline {
-			return r.updateStatus(instance, resv1.ResourceStateOnline, err, true)
-		}
-		return r.updateStatus(instance, resv1.ResourceStateRetrying, err, true)
-	}
 
+	// Bucket is marked for deletion
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
 		// The object is being deleted
 		if ContainsFinalizer(instance) {
@@ -280,6 +264,26 @@ func (r *ReconcileBucket) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 	// Set the Default Bucket creation parameters, and attach a 8 chars rand string
 	// Set the Status field for the first time
+	if !r.isValidChange(instance) {
+		return r.updateStatus(instance, "Update Failed", fmt.Errorf("bindingFrom, Resiliency, Location, BucketType and StorageClass are immutable"), false)
+	}
+	r.setDefault(instance, token)
+	credentials, parentObj, retry, err := r.processCredentials(instance)
+	if err != nil {
+		log.Info("ProcessCredentials", "error", err, "retry", retry)
+		if instance.Status.State == resv1.ResourceStateOnline || instance.Status.State == resv1.ResourceStateUnknown {
+			return r.updateStatus(instance, resv1.ResourceStateUnknown, err, retry)
+		}
+		return r.updateStatus(instance, resv1.ResourceStateWaiting, err, retry)
+	}
+	log.Info("Credentials", "get", credentials)
+	resourceInstanceID, endpoints, err := retrieveCredentials(credentials)
+	if err != nil {
+		if instance.Status.State == resv1.ResourceStateOnline {
+			return r.updateStatus(instance, resv1.ResourceStateOnline, err, true)
+		}
+		return r.updateStatus(instance, resv1.ResourceStateRetrying, err, true)
+	}
 
 	err = r.dyncGetEndpointURL(instance, endpoints, token)
 	if err != nil {
@@ -447,7 +451,7 @@ func (r *ReconcileBucket) updateStatus(instance *ibmcloudv1alpha1.Bucket, state 
 	}
 	if retry {
 		log.Info("updateStatus", "error", err, "retry", retry, "state", state)
-		if state == resv1.ResourceStateFailed || state == resv1.ResourceStateWaiting || state == resv1.ResourceStateRetrying {
+		if state == resv1.ResourceStateFailed || state == resv1.ResourceStateWaiting || state == resv1.ResourceStateRetrying || state == resv1.ResourceStateUnknown {
 			log.Info("updateStatue", "instance", instance.ObjectMeta.Name, "requeue After", retryInterval)
 			return reconcile.Result{Requeue: true, RequeueAfter: retryInterval}, nil
 
