@@ -50,7 +50,7 @@ kind: Bucket
 * The location, resiliency cannot be changed without removing and recreating the bucket.
 * The CORS rules and RetentionPolicy can be changed by using "kubectl apply"
 * `bindOnly` is used to bind to existing bucket. You can also use this to change the cors rule and retention policy of existing bucket. Removing the binconly CR will not remove the bucket, but the original CORS rule and Policy will be restored. `Note: Once you create a retention policy it can not be deleted.` To understand the `Retention Policy`, please reference [Immutable Object Storage](https://cloud.ibm.com/docs/services/cloud-object-storage/basics?topic=cloud-object-storage-immutable)  
-
+* Support for KeyProtect - Key Protect allows you to manage your own keys to encrypt objects in a bucket. Please see [KeyProtect setup](#keyprotectSetup) section for detail
 
 ### <a name="section2"></a>2. Bucket Controller Schema
 
@@ -89,6 +89,12 @@ spec:
   resiliency: <Possible value: Cross Region, Regional, Single Site>
   location: <Possible value: depend on the resuleicy, please see attached table>
   storageClass: <Possible value: Standard, Value, Cold Value, Flex>
+  keyProtect:
+    bindingFrom:
+      name: <BindingObject name of the KeyProtect Instance, this option requires using ibmcloud-operator>
+    instanceName: <Key Protect Instance Name>
+    instanceID: <Key Protect Instance ID>
+    keyName: <Name of the KeyProtect Key>
   bindOnly: <true, false(default): bind to existing bucket>
   corsRules:
     allowedOrigin: <string>
@@ -155,6 +161,28 @@ spec:
       key: Endpoints
   bucketname: cos4seedb-bucket-014
   ```
+In this example: Using Key Protect to encrypt objects in a bucket.
+  ```
+  apiVersion: ibmcloud.ibm.com/v1alpha1
+  kind: Bucket
+  metadata:
+    labels:
+      controller-tools.k8s.io: "1.0"
+    name: cos4seedb-bucket-jadeyliu-m2c711
+  spec:
+    resource_instance_id:
+      secretKeyRef:
+        name: cos4seedb
+        key: resource_instance_id
+    endpoints:
+      configMapKeyRef:
+        name: cos4seedbm
+        key: endpoints
+    bucketname: cos4seedb-bucket-jadeyliu-m2c711
+    keyProtect:
+      instanceID: ba2be308-91b1-4a9d-b2a9-b23967455d63
+      keyName: forcos4seedb
+  ```
 
 #### <a name="sampleYaml"></a>- Sample Yaml for creation Service and Binding
 
@@ -179,8 +207,90 @@ spec:
   role: Manager
 
 ```
+### <a name="keyprotectSetup"></a>3. Key Protect setup
 
-###  <a name="section3"></a>3. How to create Cloud Object Storage Credentials using IBM Cloud Cli
+#### A. Grant service authorization for use with IBM COS
+
+  1. Open your IBM Cloud dashboard
+  2. From the menu bar, click Manage > Access (IAM)
+  3. On the left panel, click Authorization, click Create
+  4. In the Source service menu, select Cloud Object Storage.
+  5. In the Source service instance menu, select the service instance to authorize.
+  6. In the Target service menu, select IBM Key Protect.
+  7. In the Target service instance menu, select the service instance to authorize.
+  8. Enable the Reader role.
+  9. Click Authorize.
+
+#### B. Create Key Protect using IBM Cloud dashboard
+
+  1. Create a Key Protect instance
+  2. Once the instance is instantiated, take note of the instance name
+  3. If you have multiple instance with the same name, please use instance ID
+
+    ```
+    ibmcloud resource service-instance <instance name> -id
+    ```
+
+    take note of the ID ( in the format of xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx ) of the instance you want to use
+    add the ID or Name to the Bucket spec for keyProtect
+
+    example:
+
+    ```
+      keyProtect:
+        instanceID: ba2be308-91b1-4a9d-b2a9-b23967455d63
+        keyName: forcos4seedb
+    ```
+
+#### C. Create Key Protect using IBM Cloud Operators
+
+Please refer to [IBM Cloud Operators](https://github.com/ibm/cloud-operators) for detail setup 
+
+    Example Yaml file
+
+    ```
+    apiVersion: ibmcloud.ibm.com/v1alpha1
+    kind: Service
+    metadata:
+      labels:
+        controller-tools.k8s.io: "1.0"
+      name: keyprotect4cos
+    spec:
+      externalName: keyprotect4cos
+      serviceClass: kms
+      plan: tiered-pricing
+    ---
+    apiVersion: ibmcloud.ibm.com/v1alpha1
+    kind: Binding
+    metadata:
+      name: keyprotect4cos
+    spec:
+      serviceName: keyprotect4cos
+      role: Manager
+    ---
+    apiVersion: ibmcloud.ibm.com/v1alpha1
+    kind: Bucket
+    metadata:
+      labels:
+        controller-tools.k8s.io: "1.0"
+      name: cos4seedb-bucket-jadeyliu-m2c711
+    spec:
+      resource_instance_id:
+        secretKeyRef:
+          name: cos4seedb
+          key: resource_instance_id
+      endpoints:
+        configMapKeyRef:
+          name: cos4seedbm
+          key: endpoints
+      bucketname: cos4seedb-bucket-jadeyliu-m2c711
+      keyProtect:
+        bindingFrom:
+          name: keyprotect4cosa
+        keyName: forcos4seedb
+    ```
+
+###  <a name="section3"></a>4. How to create Cloud Object Storage Credentials using IBM Cloud Cli
 
 1. Login to IBM Cloud using ibmcloud login
 
