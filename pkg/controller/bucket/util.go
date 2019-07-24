@@ -676,7 +676,7 @@ func InitImmutable(bucket *ibmcloudv1alpha1.Bucket) map[string]string {
 	return anno
 }
 
-func (r *ReconcileBucket) readyKeyProtect(keyProtectInfo *ibmcloudv1alpha1.KeyProtectInfo, namespace string) (string, error) {
+func (r *ReconcileBucket) readyKeyProtect(keyProtectInfo *ibmcloudv1alpha1.KeyProtectInfo, namespace string, token string) (string, error) {
 	if keyProtectInfo.BindingFrom.Name != "" {
 		bindingObject, err := r.getBindingObject(keyProtectInfo.BindingFrom.Name, namespace)
 		if err != nil {
@@ -689,7 +689,17 @@ func (r *ReconcileBucket) readyKeyProtect(keyProtectInfo *ibmcloudv1alpha1.KeyPr
 		}
 		return serviceInstanceID, nil
 	} else if keyProtectInfo.InstanceID != "" {
-		return keyProtectInfo.InstanceID, nil
+		_, err := validInstance("", keyProtectInfo.InstanceID, token)
+		if err == nil {
+			return keyProtectInfo.InstanceID, nil
+		}
+		return "", fmt.Errorf("Invalid KeyProtect Instance Info, no such instance found %s", keyProtectInfo.InstanceID)
+	} else if keyProtectInfo.InstanceName != "" {
+		instanceID, err := validInstance(keyProtectInfo.InstanceName, "", token)
+		if instanceID != "" && err == nil {
+			return instanceID, nil
+		}
+		return "", fmt.Errorf("Invalid KeyProtect Instance Info, no such instance found %s", keyProtectInfo.InstanceName)
 	}
 	return "", fmt.Errorf("Missing KeyProtect Instance Info")
 }

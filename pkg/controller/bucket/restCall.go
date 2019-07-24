@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/IBM-Cloud/bluemix-go/models"
 	ibmcloudv1alpha1 "github.com/ibm/cos-bucket-operator/pkg/apis/ibmcloud/v1alpha1"
 )
 
@@ -55,7 +56,7 @@ func (r *ReconcileBucket) updateBucket(bucket *ibmcloudv1alpha1.Bucket, token st
 	keyCRN := ""
 
 	if bucket.Spec.KeyProtect != nil && bucket.GetObjectMeta().GetAnnotations()["KeyProtectKeyID"] == "" {
-		keyProtectInstanceID, err := r.readyKeyProtect(bucket.Spec.KeyProtect, bucket.GetObjectMeta().GetNamespace())
+		keyProtectInstanceID, err := r.readyKeyProtect(bucket.Spec.KeyProtect, bucket.GetObjectMeta().GetNamespace(), token)
 		if err != nil {
 			return statusChange, retnMessage, err
 		}
@@ -469,6 +470,47 @@ func getEndpointInfo(bucket *ibmcloudv1alpha1.Bucket, epString string, token str
 
 	log.Info(bucket.GetObjectMeta().GetName(), "Endpoints", endpoints)
 	return endpoints
+}
+
+func validInstance(instanceName string, instanceID string, token string) (string, error) {
+	restClient := http.Client{
+		Timeout: time.Second * 300,
+	}
+
+	u, err := url.ParseRequestURI("https://resource-controller.cloud.ibm.com/v2/resource_instances?limit=200")
+
+	urlStr := u.String()
+
+	req, _ := http.NewRequest("GET", urlStr, nil)
+	req.Header.Set("Authorization", token)
+	req.Header.Set("Content-Type", "application/json")
+	res, err := restClient.Do(req)
+	if err != nil {
+		log.Info("validInstanec", "error ", err)
+		return "", err
+	}
+	body, _ := ioutil.ReadAll(res.Body)
+
+	var paginatedResources = struct {
+		NextURL        string          `json:"next_url"`
+		ResourcesBytes json.RawMessage `json:"resources"`
+	}{}
+	err = json.Unmarshal([]byte(body), &paginatedResources)
+	if err != nil {
+		log.Info("Cannot Unmshal", "body", body, "error", err)
+		return "", err
+	}
+	var instances []models.ServiceInstance
+	err = json.Unmarshal([]byte(paginatedResources.ResourcesBytes), &instances)
+
+	for _, instance := range instances {
+
+		_thisInstanceID := getGUID(instance.ID)
+		if instance.Name == instanceName || _thisInstanceID == instanceID {
+			return _thisInstanceID, nil
+		}
+	}
+	return "", fmt.Errorf("No such instance found")
 }
 
 func getKeyProtectEndpoints(location string) string {
