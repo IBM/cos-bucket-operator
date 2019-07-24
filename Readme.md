@@ -109,9 +109,7 @@ spec:
     minimumRetentionDay: <integer>
 
 ```
-#### Example : 
-
-In this example, endpoints and resourceInstanceID will be retrieve from the binding object
+#### - Example : Using BindingFrom for Endpoints and ResourceInstanceID 
 ```
 apiVersion: ibmcloud.ibm.com/v1alpha1
 kind: Bucket
@@ -138,7 +136,9 @@ spec:
     maximumRetentionDay: 40
     defaultRetentionDay: 25
 ```
-In this example: IBM Cloud API Key is stored in Secret:secret4bucket with key:APIKey, resource_instance_id is stored in Secret:cos4seedb with key=resourceInstanceID, endpoints is stored in Config Map: cos4seedbm with key=Endpoints
+#### - Example: Using configMapKeyRef or secretKeyRef
+
+IBM Cloud API Key is stored in Secret:secret4bucket with key:APIKey, resource_instance_id is stored in Secret:cos4seedb with key=resourceInstanceID, endpoints is stored in Config Map: cos4seedbm with key=Endpoints
 ```
 apiVersion: ibmcloud.ibm.com/v1alpha1
 kind: Bucket
@@ -161,7 +161,7 @@ spec:
       key: Endpoints
   bucketname: cos4seedb-bucket-014
   ```
-In this example: Using Key Protect to encrypt objects in a bucket.
+#### - Using Key Protect to encrypt objects in a bucket.
   ```
   apiVersion: ibmcloud.ibm.com/v1alpha1
   kind: Bucket
