@@ -50,7 +50,7 @@ kind: Bucket
 * The location, resiliency cannot be changed without removing and recreating the bucket.
 * The CORS rules and RetentionPolicy can be changed by using "kubectl apply"
 * `bindOnly` is used to bind to existing bucket. You can also use this to change the cors rule and retention policy of existing bucket. Removing the binconly CR will not remove the bucket, but the original CORS rule and Policy will be restored. `Note: Once you create a retention policy it can not be deleted.` To understand the `Retention Policy`, please reference [Immutable Object Storage](https://cloud.ibm.com/docs/services/cloud-object-storage/basics?topic=cloud-object-storage-immutable)  
-* Support for KeyProtect - Key Protect allows you to manage your own keys to encrypt objects in a bucket. Please see [KeyProtect setup](#keyprotectSetup) section for detail
+* Support for KeyProtect - Key Protect allows you to manage your own keys to encrypt objects in a bucket. Please see [KeyProtect setup](#keyprotectSetup) section for detail. The Key ID can be found by using ```kubectl get bucket.ibmcloud.ibm.com <CR name> -o yaml``` and look under metadata->annotation->```KeyProtectKeyID```
 
 ### <a name="section2"></a>2. Bucket Controller Schema
 

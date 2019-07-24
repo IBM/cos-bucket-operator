@@ -58,13 +58,13 @@ func (r *ReconcileBucket) updateBucket(bucket *ibmcloudv1alpha1.Bucket, token st
 	if bucket.Spec.KeyProtect != nil && bucket.GetObjectMeta().GetAnnotations()["KeyProtectKeyID"] == "" {
 		keyProtectInstanceID, err := r.readyKeyProtect(bucket.Spec.KeyProtect, bucket.GetObjectMeta().GetNamespace(), token)
 		if err != nil {
-			return statusChange, retnMessage, err
+			return true, retnMessage, err
 		}
 		if keyProtectInstanceID != "" {
 			keyCRN, err = createKeyInKeyProtect(keyProtectInstanceID, bucket, token)
 			log.Info("Create KeyProtect", "Error", err)
 			if err != nil {
-				return statusChange, retnMessage, err
+				return true, retnMessage, err
 			}
 		}
 	}
