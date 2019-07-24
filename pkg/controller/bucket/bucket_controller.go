@@ -26,9 +26,8 @@ import (
 	"time"
 
 	ibmcloudoperator "github.com/ibm/cloud-operators/pkg/apis/ibmcloud/v1alpha1"
-	ibmcloudv1alpha1 "github.com/ibm/cos-bucket-operator/pkg/apis/ibmcloud/v1alpha1"
-
 	resv1 "github.com/ibm/cloud-operators/pkg/lib/resource/v1"
+	ibmcloudv1alpha1 "github.com/ibm/cos-bucket-operator/pkg/apis/ibmcloud/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -491,7 +490,9 @@ func (r *ReconcileBucket) callFinalizer(bucket *ibmcloudv1alpha1.Bucket, token s
 			return true, rmErr
 		}
 	}
-
+	if bucket.Spec.KeyProtect != nil {
+		removeKeyInKeyProtect(bucket, token)
+	}
 	if err := removeBucket(context.Background(), bucket, urlPrefix, token); err != nil {
 		log.Info("Failed to remove", "error", err)
 		if strings.Contains(err.Error(), "http: no Host in request URL") {

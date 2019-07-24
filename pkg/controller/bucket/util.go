@@ -18,6 +18,7 @@ import (
 	bxauth "github.com/IBM-Cloud/bluemix-go/authentication"
 	bxendpoints "github.com/IBM-Cloud/bluemix-go/endpoints"
 	bxrest "github.com/IBM-Cloud/bluemix-go/rest"
+
 	ibmcloudoperator "github.com/ibm/cloud-operators/pkg/apis/ibmcloud/v1alpha1"
 	ibmcloudcomm "github.com/ibm/cloud-operators/pkg/controller/binding"
 	v1 "github.com/ibm/cloud-operators/pkg/lib/ibmcloud/v1"
@@ -673,4 +674,22 @@ func InitImmutable(bucket *ibmcloudv1alpha1.Bucket) map[string]string {
 	anno["Bindonly"] = strconv.FormatBool(bucket.Spec.BindOnly)
 	log.Info(bucket.ObjectMeta.Name, "Inside InitImmutable", anno)
 	return anno
+}
+
+func (r *ReconcileBucket) readyKeyProtect(keyProtectInfo *ibmcloudv1alpha1.KeyProtectInfo, namespace string) (string, error) {
+	if keyProtectInfo.BindingFrom.Name != "" {
+		bindingObject, err := r.getBindingObject(keyProtectInfo.BindingFrom.Name, namespace)
+		if err != nil {
+			log.Info("Unable to find", "BindingObject", keyProtectInfo.BindingFrom.Name, "Error", err)
+			return "", err
+		}
+		serviceInstanceID := bindingObject.Status.InstanceID
+		if strings.Contains(serviceInstanceID, "::") {
+			serviceInstanceID = getGUID(serviceInstanceID)
+		}
+		return serviceInstanceID, nil
+	} else if keyProtectInfo.InstanceID != "" {
+		return keyProtectInfo.InstanceID, nil
+	}
+	return "", fmt.Errorf("Missing KeyProtect Instance Info")
 }
