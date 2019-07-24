@@ -227,28 +227,28 @@ spec:
   2. Once the instance is instantiated, take note of the instance name
   3. If you have multiple instance with the same name, please use instance ID
 
-    ```
+```
     ibmcloud resource service-instance <instance name> -id
-    ```
+```
 
-    take note of the ID ( in the format of xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx ) of the instance you want to use
-    add the ID or Name to the Bucket spec for keyProtect
+take note of the ID ( in the format of xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx ) of the instance you want to use
+add the ID or Name to the Bucket spec for keyProtect
 
-    example:
+example:
 
-    ```
-      keyProtect:
-        instanceID: ba2be308-91b1-4a9d-b2a9-b23967455d63
-        keyName: forcos4seedb
-    ```
+```
+  keyProtect:
+    instanceID: ba2be308-91b1-4a9d-b2a9-b23967455d63
+    keyName: forcos4seedb
+```
 
 #### C. Create Key Protect using IBM Cloud Operators
 
 Please refer to [IBM Cloud Operators](https://github.com/ibm/cloud-operators) for detail setup 
 
-    Example Yaml file
+Example Yaml file
 
-    ```
+```
     apiVersion: ibmcloud.ibm.com/v1alpha1
     kind: Service
     metadata:
@@ -288,7 +288,7 @@ Please refer to [IBM Cloud Operators](https://github.com/ibm/cloud-operators) fo
         bindingFrom:
           name: keyprotect4cosa
         keyName: forcos4seedb
-    ```
+```
 
 ###  <a name="section3"></a>4. How to create Cloud Object Storage Credentials using IBM Cloud Cli
 
