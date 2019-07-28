@@ -8,16 +8,10 @@ import (
 	"encoding/xml"
 	"fmt"
 	"math/rand"
-	"net/http"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
-
-	bx "github.com/IBM-Cloud/bluemix-go"
-	bxauth "github.com/IBM-Cloud/bluemix-go/authentication"
-	bxendpoints "github.com/IBM-Cloud/bluemix-go/endpoints"
-	bxrest "github.com/IBM-Cloud/bluemix-go/rest"
 
 	ibmcloudoperator "github.com/ibm/cloud-operators/pkg/apis/ibmcloud/v1alpha1"
 	ibmcloudcomm "github.com/ibm/cloud-operators/pkg/controller/binding"
@@ -80,10 +74,59 @@ type KeyVal struct {
 	Value string
 }
 
+func (r *ReconcileBucket) getIamTokenFromBinding(bucket *ibmcloudv1alpha1.Bucket) (string, error) {
+
+	bindingObject, err := r.getBindingObject(bucket.Spec.BindingFrom.Name, bucket.ObjectMeta.Namespace)
+	if err != nil {
+		log.Info("Unable to find", "BindingObject", bucket.Spec.BindingFrom.Name, "error", err, "namespace", bucket.ObjectMeta.Namespace)
+		if strings.Contains(bucket.Status.Message, "not found") && bucket.Status.State != resv1.ResourceStateWaiting {
+			wlocker.queueInstance(bucket, bucket.Spec.BindingFrom.Name)
+			return "", err // Dont retry, the watcher will watch for the creation of BindingObject, set for PingInterval
+		}
+		return "", err // Binding Object is not ready yet, retry in retryInterval
+	}
+	secret := &corev1.Secret{}
+	secretName := bindingObject.Spec.SecretName
+	if secretName == "" {
+		secretName = bindingObject.ObjectMeta.Name
+	}
+	if err := r.Get(context.Background(), types.NamespacedName{Name: secretName, Namespace: bucket.ObjectMeta.Namespace}, secret); err != nil {
+		if bucket.ObjectMeta.Namespace != "default" {
+			if err := r.Get(context.Background(), types.NamespacedName{Namespace: "default", Name: secretName}, secret); err != nil {
+				return "", err
+			}
+		} else {
+			return "", err
+		}
+	}
+	regionStr := r.getRegionStr(bucket.ObjectMeta.Namespace, bucket.Spec.Region)
+
+	if string(secret.Data["apikey"]) != "" {
+
+		return ondemandAuthenticate(string(secret.Data["apikey"]), regionStr)
+	}
+
+	return "", fmt.Errorf("Program finding ApiKey")
+
+}
+
+// getRegion : get the region spec
+func (r *ReconcileBucket) getRegionStr(secretnamespace string, region *keyvalue.KeyValueSource) string {
+	regionStr := "us-south"
+	if region != nil {
+		_regionStr, err := r.getFromKeyReference(*region, secretnamespace, "us-south")
+		if err != nil {
+			return regionStr
+		}
+		regionStr = _regionStr
+	}
+	return regionStr
+}
+
 // getIamToken : this function require the seed-secret-tokens secret to be available.
 func (r *ReconcileBucket) getIamToken(secretnamespace string, apiKey *keyvalue.KeyValueSource, region *keyvalue.KeyValueSource) (string, error) {
 	secretName := "seed-secret-tokens"
-
+	log.Info("getIamToken", "key", apiKey)
 	// if !reflect.DeepEqual(apiKey, ibmcloudv1alpha1.ParametersFromSource{}) {
 	if apiKey != nil {
 		regionStr := "us-south"
@@ -95,13 +138,16 @@ func (r *ReconcileBucket) getIamToken(secretnamespace string, apiKey *keyvalue.K
 			regionStr = _regionStr
 		}
 		apiKeyVal, err := r.getFromKeyReference(*apiKey, secretnamespace, "")
+		log.Info("getIamToken", "apiKeyVal", apiKeyVal, "error", err)
 		if err != nil {
 			return "", err
 		} else if apiKeyVal == "" {
 			if apiKey.SecretKeyRef != nil {
 				return "", fmt.Errorf("No such key:%s defined in Secret:%s", apiKey.SecretKeyRef.Key, apiKey.SecretKeyRef.Name)
+			} else if apiKey.ConfigMapKeyRef != nil {
+				return "", fmt.Errorf("No such key:%s defined in ConfigMap:%s", apiKey.ConfigMapKeyRef.Key, apiKey.ConfigMapKeyRef.Name)
 			}
-			return "", fmt.Errorf("No such key:%s defined in ConfigMap:%s", apiKey.ConfigMapKeyRef.Key, apiKey.ConfigMapKeyRef.Name)
+			return "", fmt.Errorf("No SecretKeyRef or ConfigMapRef defined for apiKey")
 		}
 		return ondemandAuthenticate(apiKeyVal, regionStr)
 	}
@@ -161,7 +207,8 @@ func (r *ReconcileBucket) ondemandGetToken(secretnamespace string, apiKeyStruct 
 	region = string(regionb)
 	return ondemandAuthenticate(apiKeyVal, region)
 }
-func ondemandAuthenticate(apiKeyVal string, region string) (string, error) {
+
+/* func ondemandAuthenticate(apiKeyVal string, region string) (string, error) {
 
 	config := bx.Config{
 		EndpointLocator: bxendpoints.NewEndpointLocator(region),
@@ -180,7 +227,7 @@ func ondemandAuthenticate(apiKeyVal string, region string) (string, error) {
 		return "", fmt.Errorf("Failed to authenticate with APIKey from Spec")
 	}
 	return config.IAMAccessToken, nil
-}
+} */
 
 func retrieveCredentials(credentials []KeyVal) (string, string, error) {
 
@@ -290,13 +337,15 @@ func (r *ReconcileBucket) processCredentials(bucket *ibmcloudv1alpha1.Bucket) ([
 }
 
 func (r *ReconcileBucket) getFromKeyReference(keyRef keyvalue.KeyValueSource, namespace string, keyVal string) (string, error) {
-	log.Info("getFromKeyReference", "keyRef", keyRef)
+	log.Info("getFromKeyReference", "keyRef", keyRef, "namespace", namespace)
 	if keyRef.SecretKeyRef != nil {
 		secretInstance := &corev1.Secret{}
 		err := r.Get(context.Background(), types.NamespacedName{Name: keyRef.SecretKeyRef.Name, Namespace: namespace}, secretInstance)
 		if err == nil {
 			keyVal = string(secretInstance.Data[keyRef.SecretKeyRef.Key])
+			return keyVal, nil
 		} else {
+			log.Info("getFromKeyReference", "error", err)
 			return keyVal, err
 		}
 	} else if keyRef.ConfigMapKeyRef != nil {
@@ -677,6 +726,11 @@ func InitImmutable(bucket *ibmcloudv1alpha1.Bucket) map[string]string {
 }
 
 func (r *ReconcileBucket) readyKeyProtect(keyProtectInfo *ibmcloudv1alpha1.KeyProtectInfo, namespace string, token string) (string, error) {
+	_token, err := r.getIamToken(namespace, keyProtectInfo.APIKey, nil)
+	if err != nil && _token != "" {
+		token = _token
+	}
+
 	if keyProtectInfo.BindingFrom.Name != "" {
 		bindingObject, err := r.getBindingObject(keyProtectInfo.BindingFrom.Name, namespace)
 		if err != nil {

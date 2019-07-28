@@ -219,9 +219,16 @@ func (r *ReconcileBucket) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 
+	token := ""
 	// Get IAM Token : if apiKey is not specified in the Spec, get it from the default place seed-secret-tokens,
 	//                 if seed-secret-tokens is last updated more than 15 mins ago, use seed-secret instead
-	token, err := r.getIamToken(instance.ObjectMeta.Namespace, instance.Spec.APIKey, instance.Spec.Region)
+	if instance.Spec.BindingFrom.Name != "" {
+		token, err = r.getIamTokenFromBinding(instance)
+	} else if instance.Spec.APIKey != nil {
+		token, err = r.getIamToken(instance.ObjectMeta.Namespace, instance.Spec.APIKey, instance.Spec.Region)
+	} else {
+		token, err = r.getIamToken(instance.ObjectMeta.Namespace, nil, instance.Spec.Region)
+	}
 
 	if err != nil || token == "" {
 		return r.updateStatus(instance, resv1.ResourceStateRetrying, fmt.Errorf("Retry getting ibm cloud api key"), true)

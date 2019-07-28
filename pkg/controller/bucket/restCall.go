@@ -3,7 +3,9 @@ package bucket
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
 	"crypto/md5"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
@@ -21,14 +23,24 @@ import (
 	ibmcloudv1alpha1 "github.com/ibm/cos-bucket-operator/pkg/apis/ibmcloud/v1alpha1"
 )
 
+const (
+	authHeaderPrefix = "AWS4-HMAC-SHA256"
+	timeFormat       = "20060102T150405Z"
+	shortTimeFormat  = "20060102"
+	signHeader       = "host;x-amz-date"
+
+	// emptyStringSHA256 is a SHA256 of an empty string
+	emptyStringSHA256 = `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
+)
+
 func (r *ReconcileBucket) updateBucket(bucket *ibmcloudv1alpha1.Bucket, token string, serverInstanceID string, checkExistOnly bool) (bool, string, error) {
 
 	var err error
 	retnMessage := ""
 	statusChange := false
-
+	bucketName := bucket.GetObjectMeta().GetAnnotations()["BucketName"]
 	urlPrefix, _ := getEndpointURL(bucket) // bucket.Spec.Resiliency, bucket.Spec.Location, bucket.Spec.BucketType)
-	epString := fmt.Sprintf("https://%s/%s", urlPrefix, bucket.GetObjectMeta().GetAnnotations()["BucketName"])
+	epString := fmt.Sprintf("https://%s/%s", urlPrefix, bucketName)
 	log.Info("updateBucket", "ulrPrefix", urlPrefix, "epString", epString)
 	log.Info("Call rest call ", "restAPI", epString)
 	restClient := http.Client{
@@ -42,23 +54,27 @@ func (r *ReconcileBucket) updateBucket(bucket *ibmcloudv1alpha1.Bucket, token st
 	if bucket.Spec.StorageClass != "" {
 		out = getStorageClassSpec(bucket)
 	}
-	req, _ := http.NewRequest("PUT", urlStr, &out)
+	method := "PUT"
 	if checkExistOnly {
-		req, _ = http.NewRequest("GET", urlStr, &out)
+		method = "GET"
 	}
+	req, _ := http.NewRequest(method, urlStr, &out)
 
 	// log.Info("", "out", out)
-	authString := fmt.Sprintf("%s", token)
-	req.Header.Set("Authorization", authString)
-	log.Info("Checking", "authString", authString)
+	req.Header.Set("Authorization", token)
+
 	req.Header.Set("ibm-service-instance-id", instanceid)
 	log.Info("Checking", "instanceid", instanceid)
 	keyCRN := ""
 
 	if bucket.Spec.KeyProtect != nil && bucket.GetObjectMeta().GetAnnotations()["KeyProtectKeyID"] == "" {
+		_token, err := r.getIamToken(bucket.GetObjectMeta().GetNamespace(), bucket.Spec.KeyProtect.APIKey, nil)
+		if err != nil && _token != "" {
+			token = _token
+		}
 		keyProtectInstanceID, err := r.readyKeyProtect(bucket.Spec.KeyProtect, bucket.GetObjectMeta().GetNamespace(), token)
 		if err != nil {
-			return true, retnMessage, err
+			return true, retnMessage, fmt.Errorf("%s, Please use IBmCloud APIKey", err)
 		}
 		if keyProtectInstanceID != "" {
 			keyCRN, err = createKeyInKeyProtect(keyProtectInstanceID, bucket, token)
@@ -197,6 +213,7 @@ func createKeyInKeyProtect(keyProtectInstanceID string, bucket *ibmcloudv1alpha1
 	urlStr := u.String()
 	log.Info("KeyProtect", "Body", keyBody)
 	req, _ := http.NewRequest("POST", urlStr, bytes.NewBuffer(jsonBlob))
+
 	req.Header.Set("Authorization", token)
 	req.Header.Set("bluemix-instance", keyProtectInstanceID)
 	req.Header.Set("Content-Type", "application/json")
@@ -221,7 +238,8 @@ func createKeyInKeyProtect(keyProtectInstanceID string, bucket *ibmcloudv1alpha1
 
 func removeKeyInKeyProtect(bucket *ibmcloudv1alpha1.Bucket, token string) error {
 	urlPrefix := getKeyProtectEndpoints(bucket.Spec.KeyProtect.InstanceLocation)
-	epString := fmt.Sprintf("https://%s/api/v2/keys/%s", urlPrefix, bucket.GetObjectMeta().GetAnnotations()["KeyProtectKeyID"])
+	resourceString := fmt.Sprintf("api/v2/keys/%s", bucket.GetObjectMeta().GetAnnotations()["KeyProtectKeyID"])
+	epString := fmt.Sprintf("https://%s/%s", urlPrefix, resourceString)
 
 	restClient := http.Client{
 		Timeout: time.Second * 300,
@@ -229,7 +247,9 @@ func removeKeyInKeyProtect(bucket *ibmcloudv1alpha1.Bucket, token string) error 
 	u, _ := url.ParseRequestURI(epString)
 	urlStr := u.String()
 	req, _ := http.NewRequest("DELETE", urlStr, nil)
+
 	req.Header.Set("Authorization", token)
+
 	req.Header.Set("bluemix-instance", bucket.GetObjectMeta().GetAnnotations()["KeyProtectInstanceID"])
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Prefer", "return=minimal")
@@ -262,7 +282,7 @@ func accessCorsRule(bucket *ibmcloudv1alpha1.Bucket, instanceid string, urlPrefi
 	u, _ := url.ParseRequestURI(epString)
 	urlStr := u.String()
 	req, _ := http.NewRequest(method, urlStr, bytes.NewBuffer(xmlBlob))
-
+	req.Header.Set("Authorization", token)
 	if method == "PUT" {
 		os.Stdout.Write(xmlBlob)
 		h := md5.New()
@@ -271,9 +291,9 @@ func accessCorsRule(bucket *ibmcloudv1alpha1.Bucket, instanceid string, urlPrefi
 		md5Str := base64.StdEncoding.EncodeToString(h.Sum(nil))
 		log.Info("", "md5", md5Str)
 		req.Header.Set("content-MD5", md5Str)
+
 	}
 
-	req.Header.Set("Authorization", token)
 	req.Header.Set("ibm-service-instance-id", instanceid)
 	res, err2 := restClient.Do(req)
 	if method == "PUT" {
@@ -324,7 +344,7 @@ func accessRetentionPolicy(bucket *ibmcloudv1alpha1.Bucket, instanceid string, u
 	u, _ := url.ParseRequestURI(epString)
 	urlStr := u.String()
 	req, _ := http.NewRequest(method, urlStr, bytes.NewBuffer(xmlBlob))
-
+	req.Header.Set("Authorization", token)
 	if method == "PUT" {
 		os.Stdout.Write(xmlBlob)
 		h := md5.New()
@@ -333,9 +353,9 @@ func accessRetentionPolicy(bucket *ibmcloudv1alpha1.Bucket, instanceid string, u
 		md5Str := base64.StdEncoding.EncodeToString(h.Sum(nil))
 		log.Info("", "md5", md5Str)
 		req.Header.Set("content-MD5", md5Str)
+
 	}
 
-	req.Header.Set("Authorization", token)
 	req.Header.Set("ibm-service-instance-id", instanceid)
 
 	rst, err2 := restClient.Do(req)
@@ -373,6 +393,7 @@ func removeBucket(context context.Context, bucket *ibmcloudv1alpha1.Bucket, urlP
 	u, _ := url.ParseRequestURI(epString)
 	urlStr := u.String()
 	req, _ := http.NewRequest("DELETE", urlStr, nil)
+
 	req.Header.Set("Authorization", token)
 	req.Header.Set("Host", urlPrefix)
 	raw, err := restClient.Do(req)
@@ -400,6 +421,7 @@ func removeObjectsInBucket(ctx context.Context, bucket *ibmcloudv1alpha1.Bucket,
 	xmlBlob, _ := xml.Marshal(&deleteObjects)
 	req, _ := http.NewRequest("POST", urlStr, bytes.NewBuffer(xmlBlob))
 	req.Header.Set("Authorization", token)
+
 	h := md5.New()
 	xmlBlobStr := fmt.Sprintf("%s", xmlBlob)
 	io.WriteString(h, xmlBlobStr)
@@ -423,7 +445,9 @@ func locateObjectsInBucket(ctx context.Context, bucket *ibmcloudv1alpha1.Bucket,
 	urlStr := u.String()
 
 	req, _ := http.NewRequest("GET", urlStr, nil)
+
 	req.Header.Set("Authorization", token)
+
 	res, err2 := restClient.Do(req)
 	if err2 != nil {
 		log.Info(bucket.GetObjectMeta().GetAnnotations()["BucketName"], "error ", err2)
@@ -454,7 +478,9 @@ func getEndpointInfo(bucket *ibmcloudv1alpha1.Bucket, epString string, token str
 	urlStr := u.String()
 
 	req, _ := http.NewRequest("GET", urlStr, nil)
+
 	req.Header.Set("Authorization", token)
+
 	req.Header.Set("Content-Type", "application/json")
 	res, err2 := restClient.Do(req)
 	if err2 != nil {
@@ -482,7 +508,9 @@ func validInstance(instanceName string, instanceID string, token string) (string
 	urlStr := u.String()
 
 	req, _ := http.NewRequest("GET", urlStr, nil)
+
 	req.Header.Set("Authorization", token)
+
 	req.Header.Set("Content-Type", "application/json")
 	res, err := restClient.Do(req)
 	if err != nil {
@@ -512,6 +540,43 @@ func validInstance(instanceName string, instanceID string, token string) (string
 	}
 	return "", fmt.Errorf("No such instance found")
 }
+func ondemandAuthenticate(apiKeyVal string, region string) (string, error) {
+	restClient := http.Client{
+		Timeout: time.Second * 300,
+	}
+
+	epString := fmt.Sprintf("https://iam.cloud.ibm.com/identity/token?grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=%s", apiKeyVal)
+	u, _ := url.ParseRequestURI(epString)
+	urlStr := u.String()
+
+	/* data := url.Values{}
+	data.Set("grant_type", "urn:ibm:params:oauth:grant-type:apikey")
+	data.Add("apikey", apiKeyVal) */
+	req, _ := http.NewRequest("POST", urlStr, nil)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	res, err := restClient.Do(req)
+	if res.StatusCode != 200 || err != nil {
+		log.Info("GetToken", "error ", err)
+		return "", err
+	}
+
+	body, _ := ioutil.ReadAll(res.Body)
+	var tokenInfo = struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		TokenType    string `json:"token_type"`
+		ExpiredIn    int    `json:"expire_in"`
+		Expiration   int    `json:"expiration"`
+		Scope        string `json:"scope"`
+	}{}
+	err = json.Unmarshal([]byte(body), &tokenInfo)
+	if err != nil {
+		log.Info("Cannot Unmshal", "body", body, "error", err)
+		return "", err
+	}
+
+	return tokenInfo.TokenType + " " + tokenInfo.AccessToken, nil
+}
 
 func getKeyProtectEndpoints(location string) string {
 	if location == "" {
@@ -532,4 +597,10 @@ func getKeyProtectEndpoints(location string) string {
 		return "jp-tok.kms.cloud.ibm.com"
 	}
 	return "us-south.kms.cloud.ibm.com"
+}
+
+func makeHmac(key []byte, data []byte) []byte {
+	hash := hmac.New(sha256.New, key)
+	hash.Write(data)
+	return hash.Sum(nil)
 }

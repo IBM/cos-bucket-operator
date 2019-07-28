@@ -107,6 +107,15 @@ spec:
             keyProtect:
               description: Default to standard
               properties:
+                apiKey:
+                  properties:
+                    configMapKeyRef:
+                      description: Selects a key of a ConfigMap.
+                      type: object
+                    secretKeyRef:
+                      description: Selects a key of a secret in the resource namespace
+                      type: object
+                  type: object
                 bindingFrom:
                   properties:
                     name:
