@@ -309,16 +309,27 @@ Example Yaml file
           name: keyprotect4cosa
         keyName: forcos4seedb
 ```
-#### <a name="ibmcloudapikey">D. Create IBM Cloud API Key for KeyProtect Key creation
+
+#### <a name="ibmcloudapikey"></a>D. Create IBM Cloud API Key for KeyProtect Key creation
 
 Key Protect Key creation needs IBM Cloud API Key which is different from the apikey in the IBM Cloud Object Storage's service credential. Use can use the folloging 
 script to create both ibmcloud api key and kubernetes secret (replace <APIKeyName> with your key name)
 
 ```
-ibmcloud iam api-key-create <ApiKeyName> | awk '$1 ~ /API/ && $2 ~ /Key/ { print("apikey=", $3) }' > /tmp/ibmcloudapi.key
+ibmcloud iam api-key-create <ApiKeyName> | awk '$1 ~ /API/ && $2 ~ /Key/ { print("apikey="$3) }' > /tmp/ibmcloudapi.key
 k create secret generic <SecretName> --type=Secret --from-env-file=/tmp/ibmcloudapi.key
 ```
+Once the secret is created you can add the spec as the following ( SecretName is ibmcloudapikey)
 
+```
+keyProtect:
+     instanceID: ba2be308-91b1-4a9d-b2a9-b23967455d63
+     keyName: forcos4seedb
+     apiKey:
+       secretKeyRef:
+         name: ibmcloudapikey
+         key: apikey
+```
 ###  <a name="section3"></a>4. How to create Cloud Object Storage Credentials using IBM Cloud Cli
 
 1. Login to IBM Cloud using ibmcloud login

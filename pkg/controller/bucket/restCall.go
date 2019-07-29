@@ -69,20 +69,19 @@ func (r *ReconcileBucket) updateBucket(bucket *ibmcloudv1alpha1.Bucket, token st
 
 	if bucket.Spec.KeyProtect != nil && bucket.GetObjectMeta().GetAnnotations()["KeyProtectKeyID"] == "" {
 		_token, err := r.getIamToken(bucket.GetObjectMeta().GetNamespace(), bucket.Spec.KeyProtect.APIKey, nil)
-		if err != nil && _token != "" {
-			token = _token
-		}
-		keyProtectInstanceID, err := r.readyKeyProtect(bucket.Spec.KeyProtect, bucket.GetObjectMeta().GetNamespace(), token)
+
+		keyProtectInstanceID, err := r.readyKeyProtect(bucket.Spec.KeyProtect, bucket.GetObjectMeta().GetNamespace(), _token)
 		if err != nil {
 			return true, retnMessage, fmt.Errorf("%s, Please use IBmCloud APIKey", err)
 		}
 		if keyProtectInstanceID != "" {
-			keyCRN, err = createKeyInKeyProtect(keyProtectInstanceID, bucket, token)
+			keyCRN, err = createKeyInKeyProtect(keyProtectInstanceID, bucket, _token)
 			log.Info("Create KeyProtect", "Error", err)
 			if err != nil {
 				return true, retnMessage, err
 			}
 		}
+		log.Info("createKeyInKeyProtect")
 	}
 	if keyCRN != "" {
 		log.Info("Enable Key Protect", "CRN", keyCRN)
@@ -236,7 +235,12 @@ func createKeyInKeyProtect(keyProtectInstanceID string, bucket *ibmcloudv1alpha1
 	return "", err2
 }
 
-func removeKeyInKeyProtect(bucket *ibmcloudv1alpha1.Bucket, token string) error {
+func (r *ReconcileBucket) removeKeyInKeyProtect(bucket *ibmcloudv1alpha1.Bucket, token string) error {
+	if bucket.Spec.KeyProtect != nil && bucket.Spec.KeyProtect.APIKey != nil {
+
+		token, _ = r.getIamToken(bucket.GetObjectMeta().GetNamespace(), bucket.Spec.KeyProtect.APIKey, nil)
+	}
+
 	urlPrefix := getKeyProtectEndpoints(bucket.Spec.KeyProtect.InstanceLocation)
 	resourceString := fmt.Sprintf("api/v2/keys/%s", bucket.GetObjectMeta().GetAnnotations()["KeyProtectKeyID"])
 	epString := fmt.Sprintf("https://%s/%s", urlPrefix, resourceString)
@@ -574,7 +578,6 @@ func ondemandAuthenticate(apiKeyVal string, region string) (string, error) {
 		log.Info("Cannot Unmshal", "body", body, "error", err)
 		return "", err
 	}
-
 	return tokenInfo.TokenType + " " + tokenInfo.AccessToken, nil
 }
 

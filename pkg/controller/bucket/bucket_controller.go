@@ -498,7 +498,7 @@ func (r *ReconcileBucket) callFinalizer(bucket *ibmcloudv1alpha1.Bucket, token s
 		}
 	}
 	if bucket.Spec.KeyProtect != nil {
-		removeKeyInKeyProtect(bucket, token)
+		r.removeKeyInKeyProtect(bucket, token)
 	}
 	if err := removeBucket(context.Background(), bucket, urlPrefix, token); err != nil {
 		log.Info("Failed to remove", "error", err)
