@@ -23,24 +23,36 @@ kind: Bucket
 
 * Bucket operator can be used independent of the [IBM Cloud Operators](https://github.com/ibm/cloud-operators). 
   * Using Binding object: Please reference to the [IBM Cloud Operators](https://github.com/ibm/cloud-operators) for installation detail and please see the [sample service and binding yaml](#sampleYaml).
-  * To use bucket operator independently, user needs to provide the following information thru kubernetes secrets or configmap. (see [section 2](#section2) for schema information)
+  * To use bucket operator independently, user needs to provide the following information thru kubernetes secrets or configmap. (see [section 2](#section2) for schema information). The `apikey` field in the IBM Cloud Object Storage's service credentail can be used instead of IBM Cloud API Key. 
     1. apiKey
 
-        a. use the installation script 
-            ```
-            curl -sL https://raw.githubusercontent.com/IBM/cos-bucket-operator/master/hack/install-bucket-operator.sh | bash 
-            ```
+          Specification:
 
-        b. use an existing IBM Cloud API Key - create either a kubernetes secret or configmap. And then use the following spec to specify where to locate the apiKey
-            ```
+
             apiKey:
               secretKeyRef:
                 name: <name of the kubernetes secret>
                 key: <the name of the key inside secret identified by name>
-            configMapKeyRef:
-              name: <name of the configmap>
-              key: <the name of the key inside configmap identified by name>
-            ```
+              configMapKeyRef:
+                name: <name of the configmap>
+                key: <the name of the key inside configmap identified by name>
+
+
+        +  option 1. use the installation script 
+               ```
+               curl -sL https://raw.githubusercontent.com/IBM/cos-bucket-operator/master/hack/install-bucket-operator.sh | bash 
+               ```
+
+        + option 2. create a new IBMCloud API Key 
+
+              Use ibmcloud cli to create a new IBM Cloud API Key - `ibmcloud iam api-key-create <APIKeyName>`
+
+              Please see [Understanding IBM Cloud API Key](https://cloud.ibm.com/docs/iam?topic=iam-manapikey)
+              Refer to [Example Script](#ibmcloudapikey) for how to create ibmcloud api key and use it to create kubernetes secret
+
+        + option 3. use an existing IBM Cloud API Key - create either a kubernetes secret or configmap. 
+            And then use the following spec to specify where to locate the apiKey
+            
     2. endpoints - from the Cloud Object Storage credentials. Please see [Section 3](#section3)
 
     3. resourceInstanceID - from the Cloud Object Storage Credentials.
@@ -51,6 +63,7 @@ kind: Bucket
 * The CORS rules and RetentionPolicy can be changed by using "kubectl apply"
 * `bindOnly` is used to bind to existing bucket. You can also use this to change the cors rule and retention policy of existing bucket. Removing the binconly CR will not remove the bucket, but the original CORS rule and Policy will be restored. `Note: Once you create a retention policy it can not be deleted.` To understand the `Retention Policy`, please reference [Immutable Object Storage](https://cloud.ibm.com/docs/services/cloud-object-storage/basics?topic=cloud-object-storage-immutable)  
 * Support for KeyProtect - Key Protect allows you to manage your own keys to encrypt objects in a bucket. Please see [KeyProtect setup](#keyprotectSetup) section for detail. The Key ID can be found by using ```kubectl get bucket.ibmcloud.ibm.com <CR name> -o yaml``` and look under metadata->annotation->```KeyProtectKeyID```
+The spec "apiKey" under KeyProtect should be pointing to the kubernets secret or kubernets configmap for ibm cloud api Key. Since apikey in IBM Cloud Object Storage's service credential is limited for Bucket operation, it cannot be used for KeyProtect service.
 
 ### <a name="section2"></a>2. Bucket Controller Schema
 
@@ -95,6 +108,12 @@ spec:
     instanceName: <Key Protect Instance Name>
     instanceID: <Key Protect Instance ID>
     keyName: <Name of the KeyProtect Key>
+    APIKey:  
+      secretKeyRef:
+        name: <name of the kubernetes secret>
+        key: <the name of the key inside secret identified by name>
+      configMapKeyRef:
+        name: <name of the configmap>
   bindOnly: <true, false(default): bind to existing bucket>
   corsRules:
     allowedOrigin: <string>
@@ -288,6 +307,15 @@ Example Yaml file
         bindingFrom:
           name: keyprotect4cosa
         keyName: forcos4seedb
+```
+#### <a name="ibmcloudapikey">D. Create IBM Cloud API Key for KeyProtect Key creation
+
+Key Protect Key creation needs IBM Cloud API Key which is different from the apikey in the IBM Cloud Object Storage's service credential. Use can use the folloging 
+script to create both ibmcloud api key and kubernetes secret (replace <APIKeyName> with your key name)
+
+```
+ibmcloud iam api-key-create <ApiKeyName> | awk '$1 ~ /API/ && $2 ~ /Key/ { print("apikey=", $3) }' > /tmp/ibmcloudapi.key
+k create secret generic <SecretName> --type=Secret --from-env-file=/tmp/ibmcloudapi.key
 ```
 
 ###  <a name="section3"></a>4. How to create Cloud Object Storage Credentials using IBM Cloud Cli
