@@ -114,6 +114,7 @@ spec:
         key: <the name of the key inside secret identified by name>
       configMapKeyRef:
         name: <name of the configmap>
+        key: <the name of the key inside secret identified by name>
   bindOnly: <true, false(default): bind to existing bucket>
   corsRules:
     allowedOrigin: <string>

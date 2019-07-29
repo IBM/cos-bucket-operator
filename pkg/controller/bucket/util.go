@@ -726,10 +726,6 @@ func InitImmutable(bucket *ibmcloudv1alpha1.Bucket) map[string]string {
 }
 
 func (r *ReconcileBucket) readyKeyProtect(keyProtectInfo *ibmcloudv1alpha1.KeyProtectInfo, namespace string, token string) (string, error) {
-	_token, err := r.getIamToken(namespace, keyProtectInfo.APIKey, nil)
-	if err != nil && _token != "" {
-		token = _token
-	}
 
 	if keyProtectInfo.BindingFrom.Name != "" {
 		bindingObject, err := r.getBindingObject(keyProtectInfo.BindingFrom.Name, namespace)
