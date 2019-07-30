@@ -156,10 +156,10 @@ func (r *ReconcileBucket) getIamToken(secretnamespace string, apiKey *keyvalue.K
 	if err := r.Get(context.Background(), types.NamespacedName{Name: secretName, Namespace: secretnamespace}, secret); err != nil {
 		if secretnamespace != "default" {
 			if err := r.Get(context.Background(), types.NamespacedName{Namespace: "default", Name: secretName}, secret); err != nil {
-				return "", err
+				return r.ondemandGetToken(secretnamespace, apiKey)
 			}
 		} else {
-			return "", err
+			return r.ondemandGetToken(secretnamespace, apiKey)
 		}
 	}
 
@@ -171,6 +171,8 @@ func (r *ReconcileBucket) getIamToken(secretnamespace string, apiKey *keyvalue.K
 }
 
 func (r *ReconcileBucket) ondemandGetToken(secretnamespace string, apiKeyStruct *keyvalue.KeyValueSource) (string, error) {
+
+	log.Info("Calling ondemandGetToken")
 	secretName := "seed-secret"
 	apikeyRef := "api-key"
 	apiKeyVal := ""
@@ -179,7 +181,7 @@ func (r *ReconcileBucket) ondemandGetToken(secretnamespace string, apiKeyStruct 
 		if secretnamespace != "default" {
 			if err := r.Get(context.Background(), types.NamespacedName{Namespace: "default", Name: secretName}, secret); err != nil {
 				log.Info("ondemandGetToken", "error", err)
-				return "", fmt.Errorf("Authenticating error: default Secret 'seed-secert' not found, please specity apiKey in Spec field")
+				return "", fmt.Errorf("Authenticating error: default Secret 'seed-secert' not found, please specify apiKey in Spec field")
 
 			}
 		} else {

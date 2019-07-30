@@ -231,7 +231,7 @@ func (r *ReconcileBucket) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	if err != nil || token == "" {
-		return r.updateStatus(instance, resv1.ResourceStateRetrying, fmt.Errorf("Retry getting ibm cloud api key"), true)
+		return r.updateStatus(instance, resv1.ResourceStateRetrying, fmt.Errorf("%s, Retry getting ibm cloud api key", err), true)
 	}
 
 	// Bucket is marked for deletion
