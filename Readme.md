@@ -5,7 +5,7 @@ kind: Bucket
 
 ### 1. Introduction
 
-<em>Bucket operator is used to control life-cycle of Cloud Object Storage Bucket </em>
+<em>Bucket operator is used to control life-cycle of Cloud Object Storage Bucket. It also support using IBM Key Protect (SSE-KP) to manage encryption keys to encrypt bucket </em>
 
 
 * Bucket name will be the name of the CR plus a ramdom character string (8 chars long). For example, if your CR name is my-cos-bucket-1, your bucket name will be my-cos-bucket-1-xxxxxxxx, where xxxxxxxx is a random 8 characters string. BucketName can be retrieved by checking the CR's metadata->annotations["BucketName"]
@@ -23,12 +23,10 @@ kind: Bucket
 
 * Bucket operator can be used independent of the [IBM Cloud Operators](https://github.com/ibm/cloud-operators). 
   * Using Binding object: Please reference to the [IBM Cloud Operators](https://github.com/ibm/cloud-operators) for installation detail and please see the [sample service and binding yaml](#sampleYaml).
-  * To use bucket operator independently, user needs to provide the following information thru kubernetes secrets or configmap. (see [section 2](#section2) for schema information). The `apikey` field in the IBM Cloud Object Storage's service credentail can be used instead of IBM Cloud API Key. 
+  * To use bucket operator independently, user needs to provide the following information thru kubernetes secrets or configmap. (see [section 2](#section2) for schema information). The `apiKey` field in the IBM Cloud Object Storage's service credentail can be used instead of IBM Cloud API Key. 
     1. apiKey
 
           Specification:
-
-
             apiKey:
               secretKeyRef:
                 name: <name of the kubernetes secret>
@@ -47,15 +45,15 @@ kind: Bucket
 
               Use ibmcloud cli to create a new IBM Cloud API Key - `ibmcloud iam api-key-create <APIKeyName>`
 
-              Please see [Understanding IBM Cloud API Key](https://cloud.ibm.com/docs/iam?topic=iam-manapikey)
-              Refer to [Example Script](#ibmcloudapikey) for how to create ibmcloud api key and use it to create kubernetes secret
+              Please see [Understanding IBM Cloud API Key](https://cloud.ibm.com/docs/iam?topic=iam-manapiKey)
+              Refer to [Example Script](#ibmcloudapiKey) for how to create ibmcloud api key and use it to create kubernetes secret
 
         + option 3. use an existing IBM Cloud API Key - create either a kubernetes secret or configmap. 
             And then use the following spec to specify where to locate the apiKey
             
     2. endpoints - from the Cloud Object Storage credentials. Please see [Section 3](#section3)
 
-    3. resourceInstanceID - from the Cloud Object Storage Credentials.
+    3. resourece_instance_id - from the Cloud Object Storage Credentials.
 
 * If the bucket was removed outside of the Lifecycle of the controller, the bucket will be created with name plus different random strings at the end
 * Object inside Bucket will be removed when the deleting the controller, KeepIfNotEmpty flag can be used to avoid accidentally removing of non-empty bucket. With this flag, the Deleting action will fail and will stay in "Deleting" status, until user manual remove the object(s) inside the bucket. Or remove the KeepIfNotEmpty flag from the yaml spec and use `kubectl apply` to change the desired action.
@@ -63,11 +61,11 @@ kind: Bucket
 * The CORS rules and RetentionPolicy can be changed by using "kubectl apply"
 * `bindOnly` is used to bind to existing bucket. You can also use this to change the cors rule and retention policy of existing bucket. Removing the binconly CR will not remove the bucket, but the original CORS rule and Policy will be restored. `Note: Once you create a retention policy it can not be deleted.` To understand the `Retention Policy`, please reference [Immutable Object Storage](https://cloud.ibm.com/docs/services/cloud-object-storage/basics?topic=cloud-object-storage-immutable)  
 * Support for KeyProtect - Key Protect allows you to manage your own keys to encrypt objects in a bucket. Please see [KeyProtect setup](#keyprotectSetup) section for detail. The Key ID can be found by using ```kubectl get bucket.ibmcloud.ibm.com <CR name> -o yaml``` and look under metadata->annotation->```KeyProtectKeyID```
-The spec "apiKey" under KeyProtect should be pointing to the kubernets secret or kubernets configmap for ibm cloud api Key. Since apikey in IBM Cloud Object Storage's service credential is limited for Bucket operation, it cannot be used for KeyProtect service.
+The spec "apiKey" under KeyProtect should be pointing to the kubernets secret or kubernets configmap for ibm cloud api Key. Since apiKey in IBM Cloud Object Storage's service credential is limited for Bucket operation, it cannot be used for KeyProtect service.
 
 ### <a name="section2"></a>2. Bucket Controller Schema
 
-The Credentials field inside Spec should contains three needed information about where to retrieve the values of `resource_instance_id`, `apikey`, and `endpoints`.
+The Credentials field inside Spec should contains three needed information about where to retrieve the values of `resource_instance_id`, `apiKey`, and `endpoints`.
 If no keys is defined in the spec of either bindingRef, secretKeyRef or configMapKeyRef, then the operators will try to find all 3 values from it.
 If there are duplicate key specified for more than one Ref, the latter one will overwrite the value in the previous one. The sequence is configMapRef > secretKeyRef > bindingRef. 
 ```
@@ -76,24 +74,27 @@ kind: Bucket
 metadata:
   name: <name of the CR>
 spec:
+  # if using ibmcloud operator, use only bindingFrom
   bindingFrom:
     name: <name of the binding CR>
-  apiKey:
+  # if not using ibmcloud operator, please specify apiKey, resource_instance_id and endpoints from the COS service credentails
+  apiKey:  
+    # Only required either secretKeyRef or configMapKeyRef>
     secretKeyRef:
       name: <name of the kubernetes secret>
       key: <the name of the key inside secret identified by name>
     configMapKeyRef:
       name: <name of the configmap>
       key: <the name of the key inside configmap identified by name>
-  endpoints:
+  endpoints: <Only required either secretKeyRef or configMapKeyRef>
     secretKeyRef:
       name: <name of the kubernetes secret>
       key: <the name of the key inside secret identified by name>
     configMapKeyRef:
       name: <name of the configmap>
       key: <the name of the key inside configmap identified by name>
-  resourceInstanceID:
-    secretKeyRef:
+  resource_instance_id: <Only required either secretKeyRef or configMapKeyRef>
+    secretKeyRef: 
       name: <name of the kubernetes secret>
       key: <the name of the key inside secret identified by name>
     configMapKeyRef:
@@ -103,11 +104,10 @@ spec:
   location: <Possible value: depend on the resuleicy, please see attached table>
   storageClass: <Possible value: Standard, Value, Cold Value, Flex>
   keyProtect:
-    bindingFrom:
+    # if using ibmcloud operators, use only bindingFrom
+    bindingFrom:  <Optional, if using APIKey>
       name: <BindingObject name of the KeyProtect Instance, this option requires using ibmcloud-operator>
-    instanceName: <Key Protect Instance Name>
-    instanceID: <Key Protect Instance ID>
-    keyName: <Name of the KeyProtect Key>
+    # if not using ibmcloud operators, please specify ibm cloud apikey
     APIKey:  
       secretKeyRef:
         name: <name of the kubernetes secret>
@@ -115,6 +115,9 @@ spec:
       configMapKeyRef:
         name: <name of the configmap>
         key: <the name of the key inside secret identified by name>
+    instanceName: <Key Protect Instance Name, Optional if instanceID is specified>
+    instanceID: <Key Protect Instance ID, Optional if instanceName is specifed>
+    keyName: <Name of the KeyProtect Key, Required>
   bindOnly: <true, false(default): bind to existing bucket>
   corsRules:
     allowedOrigin: <string>
@@ -129,7 +132,7 @@ spec:
     minimumRetentionDay: <integer>
 
 ```
-#### - Example : Using BindingFrom for Endpoints and ResourceInstanceID 
+#### - Example : Using BindingFrom all required values
 ```
 apiVersion: ibmcloud.ibm.com/v1alpha1
 kind: Bucket
@@ -156,9 +159,9 @@ spec:
     maximumRetentionDay: 40
     defaultRetentionDay: 25
 ```
-#### - Example: Using configMapKeyRef or secretKeyRef
+#### - Example: Not using ibmcloud operators
 
-IBM Cloud API Key is stored in Secret:secret4bucket with key:APIKey, resource_instance_id is stored in Secret:cos4seedb with key=resourceInstanceID, endpoints is stored in Config Map: cos4seedbm with key=Endpoints
+IBM Cloud API Key is stored in Secret:secret4bucket with key:APIKey, resource_instance_id is stored in Secret:cos4seedb with key=resource_instance_id, endpoints is stored in Config Map: cos4seedbm with key=endpoints
 ```
 apiVersion: ibmcloud.ibm.com/v1alpha1
 kind: Bucket
@@ -174,11 +177,11 @@ spec:
   resource_instance_id:
     secretKeyRef:
       name: cos4seedb
-      key: resourceInstanceID
+      key: resource_instance_id
   endpoints:
     configMapKeyRef:
       name: cos4seedbm
-      key: Endpoints
+      key: endpoints
   bucketname: cos4seedb-bucket-014
   ```
 #### - Using Key Protect to encrypt objects in a bucket.
@@ -190,6 +193,10 @@ spec:
       controller-tools.k8s.io: "1.0"
     name: cos4seedb-bucket-jadeyliu-m2c711
   spec:
+    apiKey:
+      secretKeyRef:
+        name: ibmcloudapikey
+        key: apikey
     resource_instance_id:
       secretKeyRef:
         name: cos4seedb
@@ -200,6 +207,10 @@ spec:
         key: endpoints
     bucketname: cos4seedb-bucket-jadeyliu-m2c711
     keyProtect:
+      apiKey: 
+        secretKeyRef:
+          name: ibmcloudapikey
+          key: apikey
       instanceID: ba2be308-91b1-4a9d-b2a9-b23967455d63
       keyName: forcos4seedb
   ```
@@ -310,16 +321,16 @@ Example Yaml file
         keyName: forcos4seedb
 ```
 
-#### <a name="ibmcloudapikey"></a>D. Create IBM Cloud API Key for KeyProtect Key creation
+#### <a name="ibmcloudapiKey"></a>D. Create IBM Cloud API Key for KeyProtect Key creation
 
-Key Protect Key creation needs IBM Cloud API Key which is different from the apikey in the IBM Cloud Object Storage's service credential. Use can use the folloging 
+Key Protect Key creation needs IBM Cloud API Key which is different from the apiKey in the IBM Cloud Object Storage's service credential. Use can use the folloging 
 script to create both ibmcloud api key and kubernetes secret (replace <APIKeyName> with your key name)
 
 ```
-ibmcloud iam api-key-create <ApiKeyName> | awk '$1 ~ /API/ && $2 ~ /Key/ { print("apikey="$3) }' > /tmp/ibmcloudapi.key
+ibmcloud iam api-key-create <ApiKeyName> | awk '$1 ~ /API/ && $2 ~ /Key/ { print("apiKey="$3) }' > /tmp/ibmcloudapi.key
 k create secret generic <SecretName> --type=Secret --from-env-file=/tmp/ibmcloudapi.key
 ```
-Once the secret is created you can add the spec as the following ( SecretName is ibmcloudapikey)
+Once the secret is created you can add the spec as the following ( SecretName is ibmcloudapiKey)
 
 ```
 keyProtect:
@@ -327,8 +338,8 @@ keyProtect:
      keyName: forcos4seedb
      apiKey:
        secretKeyRef:
-         name: ibmcloudapikey
-         key: apikey
+         name: ibmcloudapiKey
+         key: apiKey
 ```
 ###  <a name="section3"></a>4. How to create Cloud Object Storage Credentials using IBM Cloud Cli
 
@@ -345,7 +356,7 @@ keyProtect:
 
     ```
       ibmcloud resource service-key <credential_name> | 
-      awk '/apikey/ {seen = 1} seen {print}' |  
+      awk '/apiKey/ {seen = 1} seen {print}' |  
       awk '{system("bash -c '\''echo -n  "$1" | tr : = '\''"); printf("%s \n",$2)}' > /tmp/myCOSSecret.secrets
     ```
 
@@ -361,7 +372,7 @@ keyProtect:
 
     ```
       ibmcloud resource service-key cos4seedb-manual  | 
-      awk '/apikey/ {seen = 1} seen {print}' |  
+      awk '/apiKey/ {seen = 1} seen {print}' |  
       awk '{system("bash -c '\''echo -n  "$1" | tr : = '\''"); system("bash -c '\''echo -n  "$2" | base64 -i -'\''"); printf("\n")}' > /tmp/myCOSSecret.secrets
 
     ```
@@ -377,13 +388,13 @@ keyProtect:
 kubectl get secret <kubernete_secret_name> -o yaml
 ```
 
-For Example, the data field should look like the following (should contains at least apikey, endpoints and resource_instance_id)
+For Example, the data field should look like the following (should contains at least apiKey, endpoints and resource_instance_id)
 ```
 data:
-  apikey: c29tZSByYW5kb20gYXBpa2V5IGdlbmVyYXRlZCBieSB5b3UK
+  apiKey: c29tZSByYW5kb20gYXBpa2V5IGdlbmVyYXRlZCBieSB5b3UK
   endpoints: aHR0cHM6Ly9jb250cm9sLmNsb3VkLW9iamVjdC1zdG9yYWdlLmNsb3VkLmlibS5jb20vdjIvZW5kcG9pbnRz
-  iam_apikey_description: QXV0by1nZW5lcmF0ZWQ=
-  iam_apikey_name: Y29zNHNlZWRiLW1hbnVhbA==
+  iam_apiKey_description: QXV0by1nZW5lcmF0ZWQ=
+  iam_apiKey_name: Y29zNHNlZWRiLW1hbnVhbA==
   iam_role_crn: Y3JuOnYxOmJsdWVtaXg6cHVibGljOmlhbTo6OjpzZXJ2aWNlUm9sZTpNYW5hZ2Vy
   iam_serviceid_crn: Y3JuOnYxOmJsdWVtaXg6cHVibGljOmlhbS1pZGVudGl0eTo6YS84OWI3YjllNzliZjYxYTA3OTMxNzlmMTMyMzBmZDJiZDo6c2VydmljZWlkOlNlcnZpY2VJZC02YWU1ZTUwMy00MGU3LTQ3MDQtOTNlMC02Y2NhZTc4NTNmYjM=
   resource_instance_id: Y3JuOnYxOmJsdWVtaXg6cHVibGljOmNsb3VkLW9iamVjdC1zdG9yYWdlOmdsb2JhbDphLzg5YjdiOWU3OWJmNjFhMDc5MzE3OWYxMzIzMGZkMmJkOjQ5OTQ2M2QxLWUwZTYtNGMxYy04YmQzLTIzOTNhZTRjZTRkZTo6
