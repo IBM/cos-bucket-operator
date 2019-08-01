@@ -298,18 +298,15 @@ func (r *ReconcileBucket) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	if instance.Status.State == resv1.ResourceStateOnline || instance.Status.State == "Update Failed" || instance.Status.State == resv1.ResourceStateUnknown {
-		if !checkCORS(instance) && !checkRetentionPolicy(instance) {
-			return r.updateStatus(instance, resv1.ResourceStateOnline, fmt.Errorf("Bucket: %s online", instance.GetObjectMeta().GetAnnotations()["BucketName"]), false)
+		/* if !checkCORS(instance) && !checkRetentionPolicy(instance) {
+			r.updateStatus(instance, resv1.ResourceStateOnline, fmt.Errorf("Bucket: %s online", instance.GetObjectMeta().GetAnnotations()["BucketName"]), false)
+		} */
+		if checkCORS(instance) || checkRetentionPolicy(instance) {
+			r.updateStatus(instance, resv1.ResourceStateOnline, fmt.Errorf("Bucket: %s updating", instance.GetObjectMeta().GetAnnotations()["BucketName"]), true)
 		}
-
-		r.updateStatus(instance, resv1.ResourceStateOnline, fmt.Errorf("Bucket: %s updating", instance.GetObjectMeta().GetAnnotations()["BucketName"]), true)
-
 	}
 
 	// If serviceInstance is not there, or is not ready, then wait for it, this can only happen when service instance is health checked and is being recreated
-	if err != nil {
-		return r.updateStatus(instance, resv1.ResourceStateWaiting, err, true) // retry in retryInterval, theoretically, it can be put in the watch queue, in case it take time to redo the creation
-	}
 
 	r.setDefaultCorsRule(instance, resourceInstanceID, token)
 
@@ -333,7 +330,7 @@ func (r *ReconcileBucket) Reconcile(request reconcile.Request) (reconcile.Result
 	// Pending: initial creation
 	// Retrying: Create Bucket has failed
 	// Waiting: was waiting for the services/binding object
-	if instance.Status.State == resv1.ResourceStatePending || instance.Status.State == resv1.ResourceStateRetrying ||
+	if (instance.Status.State == resv1.ResourceStatePending && r.isInitialState(instance)) || instance.Status.State == resv1.ResourceStateRetrying ||
 		instance.Status.State == resv1.ResourceStateWaiting {
 		// Do the Bucket Creation
 		return r.runReconcile(instance, token, resourceInstanceID, instance.Spec.BindOnly)
@@ -391,11 +388,12 @@ func (r *ReconcileBucket) Reconcile(request reconcile.Request) (reconcile.Result
 
 					}
 				} else {
-					instance.Status.Message = "Bucket:" + instance.GetObjectMeta().GetAnnotations()["BucketName"] + " online"
+					/* instance.Status.Message = "Bucket:" + instance.GetObjectMeta().GetAnnotations()["BucketName"] + " online"
 					if err := r.Status().Update(context.Background(), instance); err != nil {
 						logRecorder(instance, "update to state", instance.Status.State, err)
 						return reconcile.Result{}, err
-					}
+					} */
+					return reconcile.Result{Requeue: true, RequeueAfter: pingInterval}, nil
 				}
 			}
 		}
@@ -419,7 +417,7 @@ func (r *ReconcileBucket) Reconcile(request reconcile.Request) (reconcile.Result
 func (r *ReconcileBucket) runReconcile(bucket *ibmcloudv1alpha1.Bucket, token string, serverInstanceID string, checkExistOnly bool) (reconcile.Result, error) {
 	retry, retnMsg, err := r.updateBucket(bucket, token, serverInstanceID, bucket.Spec.BindOnly)
 
-	logRecorder(bucket, "Calling updateBucket", "bucketname", bucket.GetObjectMeta().GetAnnotations()["BucketName"], "retry", retry, "error", err)
+	logRecorder(bucket, "Calling updateBucket", "bucketname", bucket.GetObjectMeta().GetAnnotations()["BucketName"], "retry", retry, "error", err, "msg", retnMsg)
 
 	if err != nil {
 		if retry {

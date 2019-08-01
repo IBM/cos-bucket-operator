@@ -115,6 +115,7 @@ func (r *ReconcileBucket) updateBucket(bucket *ibmcloudv1alpha1.Bucket, token st
 			log.Info("checkBindingDefault", "cors", corsChanged, "retention", retentionChanged)
 
 		}
+		retnMsg
 		if checkCORS(bucket) || corsChanged {
 			log.Info("CorsRule had changed")
 			accessCorsRule(bucket, instanceid, urlPrefix, token, "PUT", ibmcloudv1alpha1.CORSRule{})
@@ -141,6 +142,7 @@ func (r *ReconcileBucket) updateBucket(bucket *ibmcloudv1alpha1.Bucket, token st
 	log.Info("Done creating", "bucketName is ", bucket.GetObjectMeta().GetAnnotations()["BucketName"])
 	_, corsErr := accessCorsRule(bucket, instanceid, urlPrefix, token, "PUT", ibmcloudv1alpha1.CORSRule{})
 	_, retErr := accessRetentionPolicy(bucket, instanceid, urlPrefix, token, "PUT")
+	log.Info("in UpdateBucket", "corsErr", corsErr, "retErr", retErr)
 	if corsErr != nil || retErr != nil {
 		errMsg := ""
 		if corsErr == nil {
@@ -324,6 +326,18 @@ func accessCorsRule(bucket *ibmcloudv1alpha1.Bucket, instanceid string, urlPrefi
 	return ibmcloudv1alpha1.CORSRule{}, err2
 }
 
+/* type retentionFailError struct {
+	thisError Error `xml:"Error"`
+}
+*/
+type Error struct {
+	Code           string `xml:"Code"`
+	Message        string `xml:"Message"`
+	Resource       string `xml:"Resource"`
+	RequestID      string `xml:"RequestId"`
+	HTTPStatusCode int    `xml:"httpStatusCode"`
+}
+
 func accessRetentionPolicy(bucket *ibmcloudv1alpha1.Bucket, instanceid string, urlPrefix string, token string, method string) (ibmcloudv1alpha1.RetentionPolicy, error) {
 
 	// Method: PUT https://<bucket endpoint>/<bucketname>?cors=
@@ -367,6 +381,15 @@ func accessRetentionPolicy(bucket *ibmcloudv1alpha1.Bucket, instanceid string, u
 		if err2 != nil {
 			log.Info("Rest Call return ", "error", err2)
 			return ibmcloudv1alpha1.RetentionPolicy{}, err2
+		}
+		log.Info("Set Retention", "StatusCode", rst.StatusCode)
+		if rst.StatusCode == 400 {
+			_protectionFail := Error{}
+			body, _ := ioutil.ReadAll(rst.Body)
+
+			xml.Unmarshal([]byte(body), &_protectionFail)
+
+			return ibmcloudv1alpha1.RetentionPolicy{}, fmt.Errorf("%s", _protectionFail.Message)
 		}
 		return ibmcloudv1alpha1.RetentionPolicy{}, nil
 	}
@@ -560,7 +583,7 @@ func ondemandAuthenticate(apiKeyVal string, region string) (string, error) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	res, err := restClient.Do(req)
 	if res.StatusCode != 200 || err != nil {
-		log.Info("GetToken", "error ", err)
+		log.Info("GetToken", "error ", err, "statusCode", res.StatusCode)
 		return "", err
 	}
 
