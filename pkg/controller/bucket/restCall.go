@@ -115,7 +115,6 @@ func (r *ReconcileBucket) updateBucket(bucket *ibmcloudv1alpha1.Bucket, token st
 			log.Info("checkBindingDefault", "cors", corsChanged, "retention", retentionChanged)
 
 		}
-		retnMsg
 		if checkCORS(bucket) || corsChanged {
 			log.Info("CorsRule had changed")
 			accessCorsRule(bucket, instanceid, urlPrefix, token, "PUT", ibmcloudv1alpha1.CORSRule{})
