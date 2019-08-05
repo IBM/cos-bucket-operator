@@ -1,0 +1,23 @@
+apiVersion: ibmcloud.ibm.com/v1alpha1
+kind: Bucket
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: cos4seedb-bucket-jadeyliu-m2c711
+spec:
+  resource_instance_id:
+    secretKeyRef:
+      name: cos4seedb
+      key: resource_instance_id
+  endpoints:
+    configMapKeyRef:
+      name: cos4seedbm
+      key: endpoints
+  bucketname: cos4seedb-bucket-jadeyliu-m2c711
+  keyProtect:
+     instanceID: ba2be308-91b1-4a9d-b2a9-b23967455d63
+     keyName: forcos4seedb
+     apiKey:
+       secretKeyRef:
+         name: ibmcloudapikey 
+         key: apikey

@@ -26,9 +26,8 @@ import (
 	"time"
 
 	ibmcloudoperator "github.com/ibm/cloud-operators/pkg/apis/ibmcloud/v1alpha1"
-	ibmcloudv1alpha1 "github.com/ibm/cos-bucket-operator/pkg/apis/ibmcloud/v1alpha1"
-
 	resv1 "github.com/ibm/cloud-operators/pkg/lib/resource/v1"
+	ibmcloudv1alpha1 "github.com/ibm/cos-bucket-operator/pkg/apis/ibmcloud/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -220,12 +219,19 @@ func (r *ReconcileBucket) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 
+	token := ""
 	// Get IAM Token : if apiKey is not specified in the Spec, get it from the default place seed-secret-tokens,
 	//                 if seed-secret-tokens is last updated more than 15 mins ago, use seed-secret instead
-	token, err := r.getIamToken(instance.ObjectMeta.Namespace, instance.Spec.APIKey, instance.Spec.Region)
+	if instance.Spec.BindingFrom.Name != "" {
+		token, err = r.getIamTokenFromBinding(instance)
+	} else if instance.Spec.APIKey != nil {
+		token, err = r.getIamToken(instance.ObjectMeta.Namespace, instance.Spec.APIKey, instance.Spec.Region)
+	} else {
+		token, err = r.getIamToken(instance.ObjectMeta.Namespace, nil, instance.Spec.Region)
+	}
 
 	if err != nil || token == "" {
-		return r.updateStatus(instance, resv1.ResourceStateRetrying, fmt.Errorf("Retry getting ibm cloud api key"), true)
+		return r.updateStatus(instance, resv1.ResourceStateRetrying, fmt.Errorf("%s, Retry getting ibm cloud api key", err), true)
 	}
 
 	// Bucket is marked for deletion
@@ -292,18 +298,15 @@ func (r *ReconcileBucket) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	if instance.Status.State == resv1.ResourceStateOnline || instance.Status.State == "Update Failed" || instance.Status.State == resv1.ResourceStateUnknown {
-		if !checkCORS(instance) && !checkRetentionPolicy(instance) {
-			return r.updateStatus(instance, resv1.ResourceStateOnline, fmt.Errorf("Bucket: %s online", instance.GetObjectMeta().GetAnnotations()["BucketName"]), false)
+		/* if !checkCORS(instance) && !checkRetentionPolicy(instance) {
+			r.updateStatus(instance, resv1.ResourceStateOnline, fmt.Errorf("Bucket: %s online", instance.GetObjectMeta().GetAnnotations()["BucketName"]), false)
+		} */
+		if checkCORS(instance) || checkRetentionPolicy(instance) {
+			r.updateStatus(instance, resv1.ResourceStateOnline, fmt.Errorf("Bucket: %s updating", instance.GetObjectMeta().GetAnnotations()["BucketName"]), true)
 		}
-
-		r.updateStatus(instance, resv1.ResourceStateOnline, fmt.Errorf("Bucket: %s updating", instance.GetObjectMeta().GetAnnotations()["BucketName"]), true)
-
 	}
 
 	// If serviceInstance is not there, or is not ready, then wait for it, this can only happen when service instance is health checked and is being recreated
-	if err != nil {
-		return r.updateStatus(instance, resv1.ResourceStateWaiting, err, true) // retry in retryInterval, theoretically, it can be put in the watch queue, in case it take time to redo the creation
-	}
 
 	r.setDefaultCorsRule(instance, resourceInstanceID, token)
 
@@ -327,7 +330,7 @@ func (r *ReconcileBucket) Reconcile(request reconcile.Request) (reconcile.Result
 	// Pending: initial creation
 	// Retrying: Create Bucket has failed
 	// Waiting: was waiting for the services/binding object
-	if instance.Status.State == resv1.ResourceStatePending || instance.Status.State == resv1.ResourceStateRetrying ||
+	if (instance.Status.State == resv1.ResourceStatePending && r.isInitialState(instance)) || instance.Status.State == resv1.ResourceStateRetrying ||
 		instance.Status.State == resv1.ResourceStateWaiting {
 		// Do the Bucket Creation
 		return r.runReconcile(instance, token, resourceInstanceID, instance.Spec.BindOnly)
@@ -385,11 +388,12 @@ func (r *ReconcileBucket) Reconcile(request reconcile.Request) (reconcile.Result
 
 					}
 				} else {
-					instance.Status.Message = "Bucket:" + instance.GetObjectMeta().GetAnnotations()["BucketName"] + " online"
+					/* instance.Status.Message = "Bucket:" + instance.GetObjectMeta().GetAnnotations()["BucketName"] + " online"
 					if err := r.Status().Update(context.Background(), instance); err != nil {
 						logRecorder(instance, "update to state", instance.Status.State, err)
 						return reconcile.Result{}, err
-					}
+					} */
+					return reconcile.Result{Requeue: true, RequeueAfter: pingInterval}, nil
 				}
 			}
 		}
@@ -413,7 +417,7 @@ func (r *ReconcileBucket) Reconcile(request reconcile.Request) (reconcile.Result
 func (r *ReconcileBucket) runReconcile(bucket *ibmcloudv1alpha1.Bucket, token string, serverInstanceID string, checkExistOnly bool) (reconcile.Result, error) {
 	retry, retnMsg, err := r.updateBucket(bucket, token, serverInstanceID, bucket.Spec.BindOnly)
 
-	logRecorder(bucket, "Calling updateBucket", "bucketname", bucket.GetObjectMeta().GetAnnotations()["BucketName"], "retry", retry, "error", err)
+	logRecorder(bucket, "Calling updateBucket", "bucketname", bucket.GetObjectMeta().GetAnnotations()["BucketName"], "retry", retry, "error", err, "msg", retnMsg)
 
 	if err != nil {
 		if retry {
@@ -491,7 +495,9 @@ func (r *ReconcileBucket) callFinalizer(bucket *ibmcloudv1alpha1.Bucket, token s
 			return true, rmErr
 		}
 	}
-
+	if bucket.Spec.KeyProtect != nil {
+		r.removeKeyInKeyProtect(bucket, token)
+	}
 	if err := removeBucket(context.Background(), bucket, urlPrefix, token); err != nil {
 		log.Info("Failed to remove", "error", err)
 		if strings.Contains(err.Error(), "http: no Host in request URL") {

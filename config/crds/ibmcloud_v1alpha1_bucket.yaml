@@ -81,7 +81,6 @@ spec:
               - resourcelocation
               type: object
             corsRules:
-              description: Default to standard
               properties:
                 allowedHeader:
                   description: Default to *
@@ -105,6 +104,38 @@ spec:
               type: object
             keepIfNotEmpty:
               type: boolean
+            keyProtect:
+              description: Default to standard
+              properties:
+                apiKey:
+                  properties:
+                    configMapKeyRef:
+                      description: Selects a key of a ConfigMap.
+                      type: object
+                    secretKeyRef:
+                      description: Selects a key of a secret in the resource namespace
+                      type: object
+                  type: object
+                bindingFrom:
+                  properties:
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                  required:
+                  - name
+                  type: object
+                instanceID:
+                  type: string
+                instanceLocation:
+                  type: string
+                instanceName:
+                  type: string
+                keyName:
+                  type: string
+              required:
+              - keyName
+              type: object
             location:
               description: Default to regional
               type: string

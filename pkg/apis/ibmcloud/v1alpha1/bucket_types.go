@@ -36,6 +36,7 @@ type BucketSpec struct {
 	Location           string                   `json:"location,omitempty"`     // Default to us-south
 	BucketType         string                   `json:"bucketType,omitempty"`   // Default to public
 	StorageClass       string                   `json:"storageClass,omitempty"` // Default to standard
+	KeyProtect         *KeyProtectInfo          `json:"keyProtect,omitempty"`
 	CORSRules          CORSRule                 `json:"corsRules,omitempty"`
 	KeepIfNotEmpty     bool                     `json:"keepIfNotEmpty,omitempty"` // Default to true
 	Context            v1.ResourceContext       `json:"context,omitempty"`
@@ -53,6 +54,16 @@ type ParametersFromSource struct {
 	// Selects a key of a secret in the resource namespace
 	// +optional
 	SecretKeyRef *KeyReference `json:"secretKeyRef,omitempty"`
+}
+
+// KeyProtectInfo the KeyProtect Instance can be found from BindingObject specified in BindingFrom, or directly from InstanceName or InstanceID
+type KeyProtectInfo struct {
+	InstanceName     string                   `json:"instanceName,omitempty"`
+	InstanceID       string                   `json:"instanceID,omitempty"`
+	InstanceLocation string                   `json:"instanceLocation,omitempty"`
+	KeyName          string                   `json:"keyName"`
+	BindingFrom      v1.BindingFrom           `json:"bindingFrom,omitempty"`
+	APIKey           *keyvalue.KeyValueSource `json:"apiKey,omitempty"`
 }
 
 // KeyReference name value pair

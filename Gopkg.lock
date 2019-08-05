@@ -8,6 +8,32 @@
   version = "v0.40.0"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/IBM-Cloud/bluemix-go"
+  packages = [
+    ".",
+    "api/account/accountv2",
+    "api/iam/iamv1",
+    "api/mccp/mccpv2",
+    "api/resource/resourcev1/catalog",
+    "api/resource/resourcev1/controller",
+    "api/resource/resourcev1/management",
+    "authentication",
+    "bmxerror",
+    "client",
+    "crn",
+    "endpoints",
+    "helpers",
+    "http",
+    "models",
+    "rest",
+    "session",
+    "trace",
+    "utils"
+  ]
+  revision = "8be0c7b34c70681f145db0819036539c9ab5a8b1"
+
+[[projects]]
   name = "github.com/appscode/jsonpatch"
   packages = ["."]
   revision = "7c0e3b262f30165a8ec3d0b4c6059fd92703bfb2"
@@ -147,11 +173,16 @@
   branch = "master"
   name = "github.com/ibm/cloud-operators"
   packages = [
+    "pkg/apis",
     "pkg/apis/ibmcloud/v1alpha1",
     "pkg/context",
+    "pkg/controller/binding",
+    "pkg/controller/service",
     "pkg/lib/event",
     "pkg/lib/ibmcloud/v1",
+    "pkg/lib/keyvalue/v1",
     "pkg/lib/resource/v1",
+    "pkg/lib/secret",
     "pkg/util"
   ]
   revision = "baa7b49b8e45d829f4feb257db41197d59bf929f"
@@ -383,7 +414,8 @@
     "http/httpguts",
     "http2",
     "http2/hpack",
-    "idna"
+    "idna",
+    "websocket"
   ]
   revision = "3b0461eec859c4b73bb64fdc8285971fd33e3938"
 
@@ -657,6 +689,7 @@
     "pkg/version",
     "plugin/pkg/client/auth/exec",
     "plugin/pkg/client/auth/gcp",
+    "plugin/pkg/client/auth/oidc",
     "rest",
     "rest/watch",
     "restmapper",
@@ -806,6 +839,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "39fc9f6f10d8a7ebdf4100672b843296e860b2f76de013608c31875d3227b2c7"
+  inputs-digest = "ee5365ce62407be6988aa1c6640e11c23f48792b4c11c23daa0f7b3fff324ca3"
   solver-name = "gps-cdcl"
   solver-version = 1
