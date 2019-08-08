@@ -1,0 +1,19 @@
+apiVersion: ibmcloud.ibm.com/v1alpha1
+kind: Bucket
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: cos4seedb-bucket-jadeyliu-m2c711
+spec:
+  apiKey:
+    secretKeyRef:
+      name: cos4seed-hmac
+      key: apikey
+  resourceInstanceID:
+    secretKeyRef:
+      name: cos4seed-hmac
+      key: resource_instance_id
+  endpoints:
+    secretKeyRef:
+      name: cos4seed-hmac
+      key: endpoints

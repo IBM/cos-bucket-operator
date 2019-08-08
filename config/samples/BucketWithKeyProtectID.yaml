@@ -5,19 +5,22 @@ metadata:
     controller-tools.k8s.io: "1.0"
   name: cos4seedb-bucket-jadeyliu-m2c711
 spec:
-  resource_instance_id:
+  apiKey:
     secretKeyRef:
-      name: cos4seedb
+      name: cos4seed-hmac
+      key: apikey
+  resourceInstanceID:
+    secretKeyRef:
+      name: cos4seed-hmac
       key: resource_instance_id
   endpoints:
     configMapKeyRef:
-      name: cos4seedbm
+      name: cos4seed-hmac
       key: endpoints
-  bucketname: cos4seedb-bucket-jadeyliu-m2c711
   keyProtect:
-     instanceID: ba2be308-91b1-4a9d-b2a9-b23967455d63
+     instanceID: 89730538-2c9f-4f74-b861-6f1f8873f3cd
      keyName: forcos4seedb
      apiKey:
        secretKeyRef:
-         name: ibmcloudapikey 
+         name: ibmcloudapikey
          key: apikey

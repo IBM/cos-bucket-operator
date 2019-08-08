@@ -192,8 +192,11 @@ type ReconcileBucket struct {
 // Reconcile reads that state of the cluster for a Bucket object and makes changes based on the state read
 // and what is in the Bucket.Spec
 // Automatically generate RBAC rules to allow the Controller to read and write Deployments
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=ibmcloud.ibm.com,resources=buckets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=ibmcloud.ibm.com,resources=buckets/status,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=ibmcloud.ibm.com,resources=buckets/finalizers,verbs=get;list;watch;create;update;patch;delete
 func (r *ReconcileBucket) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	// Fetch the Bucket instance

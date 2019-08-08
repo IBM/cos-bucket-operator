@@ -22,7 +22,8 @@ IC_TARGET=$(ibmcloud target) \
 IC_ORG=$(echo "$IC_TARGET" | grep Org | awk '{print $2}')  \
 IC_SPACE=$(echo "$IC_TARGET" | grep Space | awk '{print $2}') \
 IC_REGION=$(echo "$IC_TARGET" | grep Region | awk '{print $2}') \
-IC_GROUP=$(echo "$IC_TARGET" | grep 'Resource' | awk '{print $3}')
+IC_GROUP=$(echo "$IC_TARGET" | grep 'Resource' | awk '{print $3}') \
+KUBE_NAMESPACE=$(kubectl config view | grep namespace: | awk '{print $2}')
 B64_APIKEY=$(echo -n $IC_APIKEY | base64)
 B64_REGION=$(echo -n $IC_REGION | base64)
 
@@ -34,19 +35,19 @@ metadata:
   labels:
     seed.ibm.com/ibmcloud-token: "apikey"
     app.kubernetes.io/name: ibmcloud-operator
-  namespace: default
+  namespace: $KUBE_NAMESPACE
 type: Opaque
 data:
   api-key: $B64_APIKEY
   region: $B64_REGION
 EOF
 
-cat <<EOF | kubectl apply -f -
+cat <<EOF | kubectl apply  -f -
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: seed-defaults
-  namespace: default
+  namespace: $KUBE_NAMESPACE
   labels:
     app.kubernetes.io/name: ibmcloud-operator
 data:

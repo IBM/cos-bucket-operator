@@ -24,9 +24,9 @@ if [ -z ${BASH_SOURCE} ]; then
   echo "* Downloading install yaml..."
   rm -rf /tmp/ibm-operators && mkdir -p /tmp/ibm-operators
   cd /tmp/ibm-operators
-  curl -sLJO https://github.com/IBM/cos-bucket-operator/archive/master.zip
-  unzip -qq cos-bucket-operator-master.zip
-  cd cos-bucket-operator-master
+  curl -sLJO https://github.com/IBM/cloud-operators/archive/master.zip
+  unzip -qq cloud-operators-master.zip
+  cd cloud-operators-master
   SCRIPTS_HOME=${PWD}/hack
 else
   SCRIPTS_HOME=$(dirname ${BASH_SOURCE})
