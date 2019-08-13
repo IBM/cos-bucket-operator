@@ -279,6 +279,7 @@ func (r *ReconcileBucket) removeKeyInKeyProtect(bucket *ibmcloudv1alpha1.Bucket,
 
 func accessCorsRule(bucket *ibmcloudv1alpha1.Bucket, instanceid string, urlPrefix string, token string, method string, _restoreCorsRule ibmcloudv1alpha1.CORSRule) (ibmcloudv1alpha1.CORSRule, error) {
 	// Method: PUT https://<bucket endpoint>/<bucketname>?cors=ibmcloudv1alpha1
+
 	inputRules := &_restoreCorsRule
 	if reflect.DeepEqual(_restoreCorsRule, ibmcloudv1alpha1.CORSRule{}) {
 		inputRules = &bucket.Spec.CORSRules
@@ -353,7 +354,9 @@ type Error struct {
 }
 
 func accessRetentionPolicy(bucket *ibmcloudv1alpha1.Bucket, instanceid string, urlPrefix string, token string, method string) (ibmcloudv1alpha1.RetentionPolicy, error) {
-
+	if (bucket.Spec.RetentionPolicy == ibmcloudv1alpha1.RetentionPolicy{}) {
+		return ibmcloudv1alpha1.RetentionPolicy{}, nil
+	}
 	// Method: PUT https://<bucket endpoint>/<bucketname>?cors=
 	retentionPolicy := &bucket.Spec.RetentionPolicy
 	if retentionPolicy.DefaultRetentionDay > retentionPolicy.MaximumRetentionDay ||

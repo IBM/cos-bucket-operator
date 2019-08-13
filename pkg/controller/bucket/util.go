@@ -347,6 +347,10 @@ func (r *ReconcileBucket) getFromKeyReference(keyRef keyvalue.KeyValueSource, na
 			keyVal = string(secretInstance.Data[keyRef.SecretKeyRef.Key])
 			return keyVal, nil
 		} else {
+			if namespace != "default" {
+				log.Info("GetSecretFrom", "Namespace", "default")
+				return r.getFromKeyReference(keyRef, "default", keyVal)
+			}
 			log.Info("getFromKeyReference", "error", err)
 			return keyVal, err
 		}
@@ -361,10 +365,15 @@ func (r *ReconcileBucket) getFromKeyReference(keyRef keyvalue.KeyValueSource, na
 			if err != nil {
 				keyVal = string(configmapInstance.Data[keyRef.ConfigMapKeyRef.Key])
 			} else {
+
 				keyVal = string(decodedStr)
 			}
 
 		} else {
+			if namespace != "default" {
+				log.Info("GetConfigMapFrom", "Namespace", "default")
+				return r.getFromKeyReference(keyRef, "default", keyVal)
+			}
 			return keyVal, err
 		}
 	}
