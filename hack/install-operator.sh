@@ -22,8 +22,8 @@ RELEASE="latest/"
 # check if running piped from curl
 if [ -z ${BASH_SOURCE} ]; then
   echo "* Downloading install yaml..."
-  rm -rf /tmp/ibm-operators && mkdir -p /tmp/ibm-operators
-  cd /tmp/ibm-operators
+  rm -rf /tmp/cos-bucket-operator && mkdir -p /tmp/cos-bucket-operator
+  cd /tmp/cos-bucket-operator
   curl -sLJO https://github.com/IBM/cos-bucket-operator/archive/master.zip
   unzip -qq cos-bucket-operator-master.zip
   cd cos-bucket-operator-master
@@ -31,9 +31,6 @@ if [ -z ${BASH_SOURCE} ]; then
 else
   SCRIPTS_HOME=$(dirname ${BASH_SOURCE})
 fi
-
-# configure the operator
-${SCRIPTS_HOME}/config-operator.sh
 
 # install the operator
 kubectl apply -f ${SCRIPTS_HOME}/../releases/${RELEASE}

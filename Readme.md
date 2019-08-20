@@ -108,7 +108,7 @@ spec:
     bindingFrom:  <Optional, if using APIKey>
       name: <BindingObject name of the KeyProtect Instance, this option requires using ibmcloud-operator>
     # if not using ibmcloud operators, please specify ibm cloud apikey
-    APIKey:  
+    apiKey:  
       secretKeyRef:
         name: <name of the kubernetes secret>
         key: <the name of the key inside secret identified by name>
@@ -254,7 +254,7 @@ spec:
 
 #### B. Create Key Protect using IBM Cloud dashboard
 
-  1. Create a Key Protect instance
+  1. Create a Key Protect instance (Note: the KeyProtect must be in the same regison ( for example: us-south) as the Bucket you are creating)
   2. Once the instance is instantiated, take note of the instance name
   3. If you have multiple instance with the same name, please use instance ID
 

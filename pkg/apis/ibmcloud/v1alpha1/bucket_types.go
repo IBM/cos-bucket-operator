@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	v1 "github.com/ibm/cloud-operators/pkg/lib/ibmcloud/v1"
 	keyvalue "github.com/ibm/cloud-operators/pkg/lib/keyvalue/v1"
+	resv1 "github.com/ibm/cloud-operators/pkg/lib/resource/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -31,7 +32,7 @@ type BucketSpec struct {
 	APIKey             *keyvalue.KeyValueSource `json:"apiKey,omitempty"`
 	Region             *keyvalue.KeyValueSource `json:"region,omitempty"`
 	Endpoints          *keyvalue.KeyValueSource `json:"endpoints,omitempty"`
-	ResourceInstanceID *keyvalue.KeyValueSource `json:"resource_instance_id,omitempty"`
+	ResourceInstanceID *keyvalue.KeyValueSource `json:"resourceInstanceID,omitempty"`
 	Resiliency         string                   `json:"resiliency,omitempty"`   // Default to regional
 	Location           string                   `json:"location,omitempty"`     // Default to us-south
 	BucketType         string                   `json:"bucketType,omitempty"`   // Default to public
@@ -41,8 +42,7 @@ type BucketSpec struct {
 	KeepIfNotEmpty     bool                     `json:"keepIfNotEmpty,omitempty"` // Default to true
 	Context            v1.ResourceContext       `json:"context,omitempty"`
 	BindOnly           bool                     `json:"bindOnly,omitempty"` // Default to false
-	// ExternalInstanceID string `json:"externalInstanceId,omitempty"`
-	RetentionPolicy RetentionPolicy `json:"retentionPolicy,omitempty"`
+	RetentionPolicy    RetentionPolicy          `json:"retentionPolicy,omitempty"`
 }
 
 // ParametersFromSource Parameters value from Source: ConfigMap or Secret
@@ -68,8 +68,9 @@ type KeyProtectInfo struct {
 
 // KeyReference name value pair
 type KeyReference struct {
-	Name string `json:"name"`
-	Key  string `json:"key"`
+	Name      string `json:"name"`
+	Key       string `json:"key"`
+	Namespace string `json:"namespace,omitempty"`
 }
 
 // CORSRule Rules for CORS
@@ -88,8 +89,7 @@ type RetentionPolicy struct {
 
 // BucketStatus defines the observed state of Bucket
 type BucketStatus struct {
-	State   string `json:"state,omitempty"`
-	Message string `json:"message,omitempty"`
+	resv1.ResourceStatus `json:",inline"`
 }
 
 // +genclient
@@ -115,6 +115,11 @@ type BucketList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Bucket `json:"items"`
+}
+
+// GetStatus returns the binding status
+func (s *Bucket) GetStatus() resv1.Status {
+	return &s.Status
 }
 
 func init() {

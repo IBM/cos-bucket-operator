@@ -6,6 +6,7 @@ import (
 	"crypto/hmac"
 	"crypto/md5"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
@@ -34,7 +35,9 @@ const (
 )
 
 func (r *ReconcileBucket) updateBucket(bucket *ibmcloudv1alpha1.Bucket, token string, serverInstanceID string, checkExistOnly bool) (bool, string, error) {
-
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
 	var err error
 	retnMessage := ""
 	statusChange := false
@@ -44,7 +47,8 @@ func (r *ReconcileBucket) updateBucket(bucket *ibmcloudv1alpha1.Bucket, token st
 	log.Info("updateBucket", "ulrPrefix", urlPrefix, "epString", epString)
 	log.Info("Call rest call ", "restAPI", epString)
 	restClient := http.Client{
-		Timeout: time.Second * 300,
+		Timeout:   time.Second * 300,
+		Transport: tr,
 	}
 	// anno := bucket.ObjectMeta.GetAnnotations()
 	instanceid := serverInstanceID // anno["ExternalInstanceID"]
@@ -119,6 +123,7 @@ func (r *ReconcileBucket) updateBucket(bucket *ibmcloudv1alpha1.Bucket, token st
 			log.Info("CorsRule had changed")
 			accessCorsRule(bucket, instanceid, urlPrefix, token, "PUT", ibmcloudv1alpha1.CORSRule{})
 			updateAnnotation = true
+			statusChange = true
 		}
 
 		if checkRetentionPolicy(bucket) || retentionChanged {
@@ -206,8 +211,12 @@ func createKeyInKeyProtect(keyProtectInstanceID string, bucket *ibmcloudv1alpha1
 		},
 	}
 	jsonBlob, _ := json.Marshal(keyBody)
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
 	restClient := http.Client{
-		Timeout: time.Second * 300,
+		Timeout:   time.Second * 300,
+		Transport: tr,
 	}
 	u, _ := url.ParseRequestURI(epString)
 	urlStr := u.String()
@@ -245,9 +254,12 @@ func (r *ReconcileBucket) removeKeyInKeyProtect(bucket *ibmcloudv1alpha1.Bucket,
 	urlPrefix := getKeyProtectEndpoints(bucket.Spec.KeyProtect.InstanceLocation)
 	resourceString := fmt.Sprintf("api/v2/keys/%s", bucket.GetObjectMeta().GetAnnotations()["KeyProtectKeyID"])
 	epString := fmt.Sprintf("https://%s/%s", urlPrefix, resourceString)
-
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
 	restClient := http.Client{
-		Timeout: time.Second * 300,
+		Timeout:   time.Second * 300,
+		Transport: tr,
 	}
 	u, _ := url.ParseRequestURI(epString)
 	urlStr := u.String()
@@ -268,6 +280,7 @@ func (r *ReconcileBucket) removeKeyInKeyProtect(bucket *ibmcloudv1alpha1.Bucket,
 
 func accessCorsRule(bucket *ibmcloudv1alpha1.Bucket, instanceid string, urlPrefix string, token string, method string, _restoreCorsRule ibmcloudv1alpha1.CORSRule) (ibmcloudv1alpha1.CORSRule, error) {
 	// Method: PUT https://<bucket endpoint>/<bucketname>?cors=ibmcloudv1alpha1
+
 	inputRules := &_restoreCorsRule
 	if reflect.DeepEqual(_restoreCorsRule, ibmcloudv1alpha1.CORSRule{}) {
 		inputRules = &bucket.Spec.CORSRules
@@ -281,8 +294,12 @@ func accessCorsRule(bucket *ibmcloudv1alpha1.Bucket, instanceid string, urlPrefi
 
 	epString := fmt.Sprintf("https://%s/%s?cors=", urlPrefix, bucket.GetObjectMeta().GetAnnotations()["BucketName"])
 	log.Info("", "epString", epString)
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
 	restClient := http.Client{
-		Timeout: time.Second * 300,
+		Timeout:   time.Second * 300,
+		Transport: tr,
 	}
 	u, _ := url.ParseRequestURI(epString)
 	urlStr := u.String()
@@ -338,7 +355,9 @@ type Error struct {
 }
 
 func accessRetentionPolicy(bucket *ibmcloudv1alpha1.Bucket, instanceid string, urlPrefix string, token string, method string) (ibmcloudv1alpha1.RetentionPolicy, error) {
-
+	if (bucket.Spec.RetentionPolicy == ibmcloudv1alpha1.RetentionPolicy{}) {
+		return ibmcloudv1alpha1.RetentionPolicy{}, nil
+	}
 	// Method: PUT https://<bucket endpoint>/<bucketname>?cors=
 	retentionPolicy := &bucket.Spec.RetentionPolicy
 	if retentionPolicy.DefaultRetentionDay > retentionPolicy.MaximumRetentionDay ||
@@ -355,8 +374,12 @@ func accessRetentionPolicy(bucket *ibmcloudv1alpha1.Bucket, instanceid string, u
 
 	epString := fmt.Sprintf("https://%s/%s?protection=", urlPrefix, bucket.GetObjectMeta().GetAnnotations()["BucketName"])
 	log.Info("", "epString", epString)
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
 	restClient := http.Client{
-		Timeout: time.Second * 300,
+		Timeout:   time.Second * 300,
+		Transport: tr,
 	}
 	u, _ := url.ParseRequestURI(epString)
 	urlStr := u.String()
@@ -413,8 +436,12 @@ func removeBucket(context context.Context, bucket *ibmcloudv1alpha1.Bucket, urlP
 
 	epString := fmt.Sprintf("https://%s/%s", urlPrefix, bucket.GetObjectMeta().GetAnnotations()["BucketName"])
 	log.Info("Remove Bucket", "epString", epString)
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
 	restClient := http.Client{
-		Timeout: time.Second * 120,
+		Timeout:   time.Second * 120,
+		Transport: tr,
 	}
 	u, _ := url.ParseRequestURI(epString)
 	urlStr := u.String()
@@ -439,8 +466,13 @@ func removeBucket(context context.Context, bucket *ibmcloudv1alpha1.Bucket, urlP
 
 func removeObjectsInBucket(ctx context.Context, bucket *ibmcloudv1alpha1.Bucket, urlPrefix string, token string, deleteObjects Delete) error {
 	epString := fmt.Sprintf("https://%s/%s?delete=", urlPrefix, bucket.GetObjectMeta().GetAnnotations()["BucketName"])
+
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
 	restClient := http.Client{
-		Timeout: time.Second * 300,
+		Timeout:   time.Second * 300,
+		Transport: tr,
 	}
 	u, _ := url.ParseRequestURI(epString)
 	urlStr := u.String()
@@ -464,8 +496,12 @@ func removeObjectsInBucket(ctx context.Context, bucket *ibmcloudv1alpha1.Bucket,
 func locateObjectsInBucket(ctx context.Context, bucket *ibmcloudv1alpha1.Bucket, urlPrefix string, token string) Delete {
 	delete := Delete{}
 	epString := fmt.Sprintf("https://%s/%s", urlPrefix, bucket.GetObjectMeta().GetAnnotations()["BucketName"])
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
 	restClient := http.Client{
-		Timeout: time.Second * 300,
+		Timeout:   time.Second * 300,
+		Transport: tr,
 	}
 	u, _ := url.ParseRequestURI(epString)
 	urlStr := u.String()
@@ -493,8 +529,12 @@ func locateObjectsInBucket(ctx context.Context, bucket *ibmcloudv1alpha1.Bucket,
 
 func getEndpointInfo(bucket *ibmcloudv1alpha1.Bucket, epString string, token string) Endpoints {
 	endpoints := Endpoints{}
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
 	restClient := http.Client{
-		Timeout: time.Second * 300,
+		Timeout:   time.Second * 300,
+		Transport: tr,
 	}
 	epString = strings.TrimSpace(epString)
 	u, err := url.ParseRequestURI(epString)
@@ -520,13 +560,17 @@ func getEndpointInfo(bucket *ibmcloudv1alpha1.Bucket, epString string, token str
 		return Endpoints{}
 	}
 
-	log.Info(bucket.GetObjectMeta().GetName(), "Endpoints", endpoints)
+	// log.Info(bucket.GetObjectMeta().GetName(), "Endpoints", endpoints)
 	return endpoints
 }
 
 func validInstance(instanceName string, instanceID string, token string) (string, error) {
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
 	restClient := http.Client{
-		Timeout: time.Second * 300,
+		Timeout:   time.Second * 300,
+		Transport: tr,
 	}
 
 	u, err := url.ParseRequestURI("https://resource-controller.cloud.ibm.com/v2/resource_instances?limit=200")
@@ -567,8 +611,12 @@ func validInstance(instanceName string, instanceID string, token string) (string
 	return "", fmt.Errorf("No such instance found")
 }
 func ondemandAuthenticate(apiKeyVal string, region string) (string, error) {
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
 	restClient := http.Client{
-		Timeout: time.Second * 300,
+		Timeout:   time.Second * 300,
+		Transport: tr,
 	}
 
 	epString := fmt.Sprintf("https://iam.cloud.ibm.com/identity/token?grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=%s", apiKeyVal)
@@ -581,7 +629,8 @@ func ondemandAuthenticate(apiKeyVal string, region string) (string, error) {
 	req, _ := http.NewRequest("POST", urlStr, nil)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	res, err := restClient.Do(req)
-	if res.StatusCode != 200 || err != nil {
+	log.Info("Check return", "error", err)
+	if err != nil || (res != nil && res.StatusCode != 200) {
 		log.Info("GetToken", "error ", err, "statusCode", res.StatusCode)
 		return "", err
 	}

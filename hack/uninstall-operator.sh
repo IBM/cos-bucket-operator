@@ -18,14 +18,13 @@
 
 # Delete the CRDs first, so controllers clean up their resources
 # TODO - should label CRDs - see if it can be done with kubebuilder
-kubectl delete --wait crd bindings.ibmcloud.ibm.com
-kubectl delete --wait crd services.ibmcloud.ibm.com
+kubectl delete --wait crd buckets.ibmcloud.ibm.com
 
 # Delete all clusterwide resources for the operator
-kubectl delete clusterrole,clusterrolebinding -l app.kubernetes.io/name=ibmcloud-operator  
+kubectl delete clusterrole,clusterrolebinding -l app.kubernetes.io/name=cos-bucket-operator  
 
 # delete all namespaced resources
-kubectl delete ns -l app.kubernetes.io/name=ibmcloud-operator
+kubectl delete ns -l app.kubernetes.io/name=cos-bucket-operator
 
 # delete secrets/config maps left
-kubectl delete secrets,configmaps -n default -l app.kubernetes.io/name=ibmcloud-operator
+kubectl delete secrets,configmaps -n default -l app.kubernetes.io/name=cos-bucket-operator

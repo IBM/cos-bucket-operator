@@ -44,7 +44,7 @@ import (
 
 var log = logf.Log.WithName("bucket")
 
-const bucketFinalizer = "bucket.ibmcloud.ibm.com"
+const bucketFinalizer = "buckets.ibmcloud.ibm.com"
 
 // ConfigCORSRule : CORS Configuration
 type ConfigCORSRule struct {
@@ -192,9 +192,14 @@ type ReconcileBucket struct {
 // Reconcile reads that state of the cluster for a Bucket object and makes changes based on the state read
 // and what is in the Bucket.Spec
 // Automatically generate RBAC rules to allow the Controller to read and write Deployments
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=ibmcloud.ibm.com,resources=buckets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=ibmcloud.ibm.com,resources=buckets/status,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=ibmcloud.ibm.com,resources=buckets/finalizers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=ibmcloud.ibm.com,resources=bindings,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=ibmcloud.ibm.com,resources=services,verbs=get;list;watch;create;update;patch;delete
 func (r *ReconcileBucket) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	// Fetch the Bucket instance
 	instance := &ibmcloudv1alpha1.Bucket{}
@@ -223,6 +228,7 @@ func (r *ReconcileBucket) Reconcile(request reconcile.Request) (reconcile.Result
 	// Get IAM Token : if apiKey is not specified in the Spec, get it from the default place seed-secret-tokens,
 	//                 if seed-secret-tokens is last updated more than 15 mins ago, use seed-secret instead
 	if instance.Spec.BindingFrom.Name != "" {
+		log.Info("Using BindingFrom")
 		token, err = r.getIamTokenFromBinding(instance)
 	} else if instance.Spec.APIKey != nil {
 		token, err = r.getIamToken(instance.ObjectMeta.Namespace, instance.Spec.APIKey, instance.Spec.Region)
@@ -341,10 +347,12 @@ func (r *ReconcileBucket) Reconcile(request reconcile.Request) (reconcile.Result
 		// Locate the Cloud Object Storage instance ID
 		recreate := false
 		anno := instance.GetObjectMeta().GetAnnotations()
-		logRecorder(instance, "Status", instance.Status.State, "Msg", instance.Status.Message, "Anno", anno["ExternalInstanceID"])
-
+		logRecorder(instance, "Status", instance.Status.State, "Msg", instance.Status.Message, "Anno", anno["cred_ExternalInstanceID"])
+		/* if anno["ExternalInstanceID"] == "" {
+			r.updateAnnotations(instance, resourceInstanceID)
+		} */
 		// If Service has been re-created
-		if anno["ExternalInstanceID"] != resourceInstanceID && instance.Status.State == resv1.ResourceStateOnline {
+		if anno["cred_ExternalInstanceID"] != resourceInstanceID && anno["cred_ExternalInstanceID"] != "" && instance.Status.State == resv1.ResourceStateOnline {
 			// try to remove the Bucket, might not be successful
 			r.callFinalizer(instance, token)
 			instance.Status.State = resv1.ResourceStatePending
@@ -379,7 +387,7 @@ func (r *ReconcileBucket) Reconcile(request reconcile.Request) (reconcile.Result
 					}
 				} else if statusChange {
 					log.Info("After UpdateBucket", "message is", instance.Status.Message)
-					if strings.Contains(instance.Status.Message, "failed") || strings.Contains(instance.Status.Message, "must be between") {
+					if strings.Contains(instance.Status.Message, "failed") || strings.Contains(instance.Status.Message, "must be between") || strings.Contains(instance.Status.Message, "updating") {
 						instance.Status.Message = "Bucket:" + instance.GetObjectMeta().GetAnnotations()["BucketName"] + " online"
 						if err := r.Status().Update(context.Background(), instance); err != nil {
 							logRecorder(instance, "update to state", instance.Status.State, err)
@@ -428,15 +436,15 @@ func (r *ReconcileBucket) runReconcile(bucket *ibmcloudv1alpha1.Bucket, token st
 		return reconcile.Result{}, nil
 
 	} else if retnMsg != "" {
-		if r.isInitialState(bucket) {
+		/* if r.isInitialState(bucket) {
 			r.updateAnnotations(bucket, serverInstanceID)
 		} else if !strings.Contains(retnMsg, "failed") {
 			r.updateAnnotations(bucket, serverInstanceID)
-		}
+		} */
 		r.updateStatus(bucket, resv1.ResourceStateOnline, fmt.Errorf("Bucket:%s online, %s", bucket.GetObjectMeta().GetAnnotations()["BucketName"], retnMsg), retry)
 		return reconcile.Result{Requeue: true, RequeueAfter: pingInterval}, nil
 	} else {
-		r.updateAnnotations(bucket, serverInstanceID)
+		// r.updateAnnotations(bucket, serverInstanceID)
 		r.updateStatus(bucket, resv1.ResourceStateOnline, fmt.Errorf("Bucket: %s online", bucket.GetObjectMeta().GetAnnotations()["BucketName"]), retry)
 		return reconcile.Result{Requeue: true, RequeueAfter: pingInterval}, nil
 
@@ -547,7 +555,7 @@ func (r *ReconcileBucket) setDefault(bucket *ibmcloudv1alpha1.Bucket, token stri
 
 	}
 	anno = InitImmutable(bucket)
-	anno["ExternalInstanceID"] = ""
+	// anno["ExternalInstanceID"] = ""
 
 	if bucket.Spec.BindOnly {
 		anno["BucketName"] = bucket.ObjectMeta.Name
@@ -557,8 +565,19 @@ func (r *ReconcileBucket) setDefault(bucket *ibmcloudv1alpha1.Bucket, token stri
 	anno["EndpointURL"] = ""
 	anno["cred_ResourceInstanceID"] = ""
 	anno["cred_Endpoints"] = ""
+	// anno["ExternalInstanceID"] = ""
+
+	if reflect.DeepEqual(bucket.Spec.CORSRules, ibmcloudv1alpha1.CORSRule{}) {
+		bucket.Spec.CORSRules = ibmcloudv1alpha1.CORSRule{AllowedHeader: "*", AllowedOrigin: "*", AllowedMethods: []string{"POST", "GET", "PUT"}}
+	}
+	corsData, _ := json.Marshal(bucket.Spec.CORSRules)
+	anno["OrigCORSRule"] = string(corsData)
+
+	retData, _ := json.Marshal(bucket.Spec.RetentionPolicy)
+	anno["OrigRetentionPolicy"] = string(retData)
+
 	bucket.GetObjectMeta().SetAnnotations(anno)
-	log.Info(bucket.ObjectMeta.Name, "Setup Annotation", anno)
+	// log.Info(bucket.ObjectMeta.Name, "Setup Annotation", anno)
 	if err := r.Update(context.Background(), bucket); err != nil {
 		return err
 	}
@@ -590,13 +609,14 @@ func (r *ReconcileBucket) setDefaultCorsRule(bucket *ibmcloudv1alpha1.Bucket, se
 
 func (r *ReconcileBucket) isInitialState(bucket *ibmcloudv1alpha1.Bucket) bool {
 	anno := bucket.GetObjectMeta().GetAnnotations()
-	if anno == nil || anno["ExternalInstanceID"] == "" {
+	if anno == nil || anno["cred_ExternalInstanceID"] == "" {
 		return true
 	}
 	return false
 }
 
 func (r *ReconcileBucket) updateAnnotations(bucket *ibmcloudv1alpha1.Bucket, serviceInstanceID string) {
+
 	anno := bucket.GetObjectMeta().GetAnnotations()
 
 	anno["ExternalInstanceID"] = serviceInstanceID
@@ -611,6 +631,7 @@ func (r *ReconcileBucket) updateAnnotations(bucket *ibmcloudv1alpha1.Bucket, ser
 	if err := r.Update(context.Background(), bucket); err != nil {
 		log.Info("Update Annotation", "error", err)
 	}
+	log.Info("UpdateAnnotations")
 }
 
 func (r *ReconcileBucket) storeBindOnlyCorsDefaults(bucket *ibmcloudv1alpha1.Bucket, corsDefault ibmcloudv1alpha1.CORSRule) {
@@ -633,10 +654,10 @@ func (r *ReconcileBucket) restoreBindOnlyCorsDefaults(bucket *ibmcloudv1alpha1.B
 	log.Info("Calling accessCoreRule", "bindOnlyDefautls", defaultCors)
 	urlPrefix, _ := getEndpointURL(bucket) // (bucket.Spec.Resiliency, bucket.Spec.Location, bucket.Spec.BucketType)
 	if reflect.DeepEqual(defaultCors, ibmcloudv1alpha1.CORSRule{}) {
-		accessCorsRule(bucket, anno["ExternalInstanceID"], urlPrefix, token, "DELETE", defaultCors)
+		accessCorsRule(bucket, anno["cred_ExternalInstanceID"], urlPrefix, token, "DELETE", defaultCors)
 
 	} else {
-		accessCorsRule(bucket, anno["ExternalInstanceID"], urlPrefix, token, "PUT", defaultCors)
+		accessCorsRule(bucket, anno["cred_ExternalInstanceID"], urlPrefix, token, "PUT", defaultCors)
 
 	}
 

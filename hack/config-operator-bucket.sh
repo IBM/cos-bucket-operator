@@ -22,8 +22,10 @@ IC_TARGET=$(ibmcloud target) \
 IC_ORG=$(echo "$IC_TARGET" | grep Org | awk '{print $2}')  \
 IC_SPACE=$(echo "$IC_TARGET" | grep Space | awk '{print $2}') \
 IC_REGION=$(echo "$IC_TARGET" | grep Region | awk '{print $2}') \
-IC_GROUP=$(echo "$IC_TARGET" | grep 'Resource' | awk '{print $3}') \
-KUBE_NAMESPACE=$(kubectl config view | grep namespace: | awk '{print $2}')
+IC_GROUP=$(echo "$IC_TARGET" | grep 'Resource' | awk '{print $3}') 
+if [ -z ${KUBE_NAMESPACE} ]; then
+  KUBE_NAMESPACE=$(kubectl config view | grep namespace: | awk '{print $2}')
+fi
 B64_APIKEY=$(echo -n $IC_APIKEY | base64)
 B64_REGION=$(echo -n $IC_REGION | base64)
 

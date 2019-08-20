@@ -1,0 +1,21 @@
+apiVersion: ibmcloud.ibm.com/v1alpha1
+kind: Service
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: cos4seed-manual
+  namespace: cos-bucket-operator
+spec:
+  externalName: cos4seed-manual
+  serviceClass: cloud-object-storage
+  plan: Alias
+---
+apiVersion: ibmcloud.ibm.com/v1alpha1
+kind: Binding
+metadata:
+  name: cos4seed-manual
+  namespace: cos-bucket-operator
+spec:
+  secretName: cos4seed-manual
+  serviceName: cos4seed-manual
+  role: Manager

@@ -1,0 +1,30 @@
+apiVersion: ibmcloud.ibm.com/v1alpha1
+kind: Service
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: cos4seedb
+spec:
+  externalName: cos4seedb
+  serviceClass: cloud-object-storage
+  plan: standard
+  context:
+    org: yhliu@us.ibm.com
+    space: dev
+    region: global
+    resourcegroup: default
+    resourcelocation: global
+---
+apiVersion: ibmcloud.ibm.com/v1alpha1
+kind: Binding
+metadata:
+  name: cos4seedb
+spec:
+  serviceName: cos4seedb
+  role: Manager
+  context:
+    org: yhliu@us.ibm.com
+    space: dev
+    region: global
+    resourcegroup: default
+    resourcelocation: global
