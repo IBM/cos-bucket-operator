@@ -71,13 +71,13 @@ else
     kubectl create secret generic cos4seed-hmac --type=Secret --from-env-file=/tmp/myCOSSecret.secrets --namespace=${NS}
 fi
 
-k create secret generic cos4seed-hmac --type=Secret --from-env-file=/tmp/myCOSSecret.secrets --namespace=cos-bucket-operator
 cd $TEST_DEPLOY_DIR
 operator-sdk scorecard \
 --cr-manifest deploy/crds/bucket_cr.yaml \
 --csv-path deploy/ibmcloud_operator.v${TAG}.clusterserviceversion.yaml \
 --namespace ${NS} \
+--init-timeout 120 \
 --verbose
 
 # clean up
-# rm -r $TEST_DEPLOY_DIR
+rm -r $TEST_DEPLOY_DIR

@@ -1,0 +1,8 @@
+apiVersion: ibmcloud.ibm.com/v1alpha1
+kind: Binding
+metadata:
+  name: cos4seed-manual
+spec:
+  serviceName: cos4seed-manual
+  serviceClass: cloud-object-storage
+  planName: Alias

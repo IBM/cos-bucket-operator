@@ -4,6 +4,7 @@ metadata:
   labels:
     controller-tools.k8s.io: "1.0"
   name: cos4seedb-bucket-jadeyliu-m2c711
+  namespace: cos-bucket-operator
 spec:
   apiKey:
     secretKeyRef:
@@ -14,6 +15,6 @@ spec:
       name: cos4seed-hmac
       key: resource_instance_id
   endpoints:
-    secretKeyRef:
+    configMapKeyRef:
       name: cos4seed-hmac
       key: endpoints

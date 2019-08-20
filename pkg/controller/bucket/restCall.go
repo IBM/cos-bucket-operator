@@ -123,6 +123,7 @@ func (r *ReconcileBucket) updateBucket(bucket *ibmcloudv1alpha1.Bucket, token st
 			log.Info("CorsRule had changed")
 			accessCorsRule(bucket, instanceid, urlPrefix, token, "PUT", ibmcloudv1alpha1.CORSRule{})
 			updateAnnotation = true
+			statusChange = true
 		}
 
 		if checkRetentionPolicy(bucket) || retentionChanged {
@@ -559,7 +560,7 @@ func getEndpointInfo(bucket *ibmcloudv1alpha1.Bucket, epString string, token str
 		return Endpoints{}
 	}
 
-	log.Info(bucket.GetObjectMeta().GetName(), "Endpoints", endpoints)
+	// log.Info(bucket.GetObjectMeta().GetName(), "Endpoints", endpoints)
 	return endpoints
 }
 

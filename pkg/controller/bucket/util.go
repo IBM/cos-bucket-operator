@@ -21,7 +21,6 @@ import (
 	ibmcloudv1alpha1 "github.com/ibm/cos-bucket-operator/pkg/apis/ibmcloud/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // ListBucketResult is used to realize Objects in a Bucket
@@ -75,10 +74,13 @@ type KeyVal struct {
 }
 
 func (r *ReconcileBucket) getIamTokenFromBinding(bucket *ibmcloudv1alpha1.Bucket) (string, error) {
-
-	bindingObject, err := r.getBindingObject(bucket.Spec.BindingFrom.Name, bucket.ObjectMeta.Namespace)
+	_namespace := bucket.Spec.BindingFrom.Namespace
+	if _namespace == "" {
+		_namespace = bucket.ObjectMeta.Namespace
+	}
+	bindingObject, err := r.getBindingObject(bucket.Spec.BindingFrom.Name, _namespace)
 	if err != nil {
-		log.Info("Unable to find", "BindingObject", bucket.Spec.BindingFrom.Name, "error", err, "namespace", bucket.ObjectMeta.Namespace)
+		log.Info("Unable to find", "BindingObject", bucket.Spec.BindingFrom.Name, "error", err, "namespace", _namespace)
 		if strings.Contains(bucket.Status.Message, "not found") && bucket.Status.State != resv1.ResourceStateWaiting {
 			wlocker.queueInstance(bucket, bucket.Spec.BindingFrom.Name)
 			return "", err // Dont retry, the watcher will watch for the creation of BindingObject, set for PingInterval
@@ -90,7 +92,7 @@ func (r *ReconcileBucket) getIamTokenFromBinding(bucket *ibmcloudv1alpha1.Bucket
 	if secretName == "" {
 		secretName = bindingObject.ObjectMeta.Name
 	}
-	if err := r.Get(context.Background(), types.NamespacedName{Name: secretName, Namespace: bucket.ObjectMeta.Namespace}, secret); err != nil {
+	if err := r.Get(context.Background(), types.NamespacedName{Name: secretName, Namespace: bindingObject.ObjectMeta.Namespace}, secret); err != nil {
 		if bucket.ObjectMeta.Namespace != "default" {
 			if err := r.Get(context.Background(), types.NamespacedName{Namespace: "default", Name: secretName}, secret); err != nil {
 				return "", err
@@ -268,7 +270,11 @@ func (r *ReconcileBucket) processCredentials(bucket *ibmcloudv1alpha1.Bucket) ([
 
 	if !reflect.DeepEqual(bucket.Spec.BindingFrom, v1.BindingFrom{}) {
 		log.Info("working on findind", "BindingObject", bucket.Spec.BindingFrom)
-		bindingObject, err := r.getBindingObject(bucket.Spec.BindingFrom.Name, bucket.ObjectMeta.Namespace)
+		_namespace := bucket.Spec.BindingFrom.Namespace
+		if _namespace == "" {
+			_namespace = bucket.ObjectMeta.Namespace
+		}
+		bindingObject, err := r.getBindingObject(bucket.Spec.BindingFrom.Name, _namespace)
 		if err != nil {
 			log.Info("Unable to find", "BindingObject", bucket.Spec.BindingFrom.Name)
 			if strings.Contains(bucket.Status.Message, "not found") && bucket.Status.State != resv1.ResourceStateWaiting {
@@ -307,8 +313,9 @@ func (r *ReconcileBucket) processCredentials(bucket *ibmcloudv1alpha1.Bucket) ([
 	if anno["cred_ResourceInstanceID"] == "" || anno["cred_Endpoints"] == "" {
 		anno["cred_ResourceInstanceID"] = resourceInstanceIDVal
 		anno["cred_Endpoints"] = endpointsVal
+		// anno["ExternalInstanceID"] = resourceInstanceIDVal
 		bucket.GetObjectMeta().SetAnnotations(anno)
-		log.Info(bucket.ObjectMeta.Name, "Setup Annotation", anno)
+		// log.Info(bucket.ObjectMeta.Name, "Setup Annotation", anno)
 		if err := r.Update(context.Background(), bucket); err != nil {
 			return bindingKeyValues, nil, false, err
 		}
@@ -383,19 +390,21 @@ func (r *ReconcileBucket) getFromKeyReference(keyRef keyvalue.KeyValueSource, na
 
 func (r *ReconcileBucket) getBindingObject(bindingObjectName string, bucketNameSpace string) (*ibmcloudoperator.Binding, error) {
 	binding := &ibmcloudoperator.Binding{}
-	gerr := r.Get(context.Background(), client.ObjectKey{
+	/* gerr := r.Get(context.Background(), client.ObjectKey{
 		Namespace: bucketNameSpace,
 		Name:      bindingObjectName,
-	}, binding)
+	}, binding) */
+	gerr := r.Get(context.Background(), types.NamespacedName{Name: bindingObjectName, Namespace: bucketNameSpace}, binding)
 
 	if gerr != nil {
-		log.Info("", "error", gerr)
+		log.Info("GetBindingObject Failed", "error", gerr, "name", bindingObjectName, "namespace", bucketNameSpace)
 		return nil, gerr
 	} else if binding.Status.State != resv1.ResourceStateOnline {
 		return &ibmcloudoperator.Binding{}, fmt.Errorf("Binding Object %s not ready", bindingObjectName)
 	}
 	return binding, nil
 }
+
 func (r *ReconcileBucket) dyncGetEndpointURL(bucket *ibmcloudv1alpha1.Bucket, endpoints string, token string) error {
 	anno := bucket.GetObjectMeta().GetAnnotations()
 	if anno != nil && anno["EndpointURL"] != "" {
@@ -403,7 +412,7 @@ func (r *ReconcileBucket) dyncGetEndpointURL(bucket *ibmcloudv1alpha1.Bucket, en
 	}
 
 	endpointsInfo := getEndpointInfo(bucket, endpoints, token)
-	log.Info(bucket.GetObjectMeta().GetName(), "dyncGetEndpointURL:endpointsInfo", endpointsInfo)
+	// log.Info(bucket.GetObjectMeta().GetName(), "dyncGetEndpointURL:endpointsInfo", endpointsInfo)
 
 	var resiliency string
 	var location string
@@ -456,7 +465,7 @@ func (r *ReconcileBucket) dyncGetEndpointURL(bucket *ibmcloudv1alpha1.Bucket, en
 }
 
 func dyncGetEndpoint(location string, buckettype string, endpoints map[string]interface{}) (string, error) {
-	log.Info("Working on ", "endpoints", endpoints, "location", location)
+	// log.Info("Working on ", "endpoints", endpoints, "location", location)
 	for lo, ep := range endpoints {
 		log.Info("CheckingLocation", "lo", lo, "Location", location, "bucketType", buckettype)
 		if lo == location {
@@ -739,6 +748,10 @@ func InitImmutable(bucket *ibmcloudv1alpha1.Bucket) map[string]string {
 func (r *ReconcileBucket) readyKeyProtect(keyProtectInfo *ibmcloudv1alpha1.KeyProtectInfo, namespace string, token string) (string, error) {
 
 	if keyProtectInfo.BindingFrom.Name != "" {
+		if keyProtectInfo.BindingFrom.Namespace != "" {
+			namespace = keyProtectInfo.BindingFrom.Namespace
+		}
+
 		bindingObject, err := r.getBindingObject(keyProtectInfo.BindingFrom.Name, namespace)
 		if err != nil {
 			log.Info("Unable to find", "BindingObject", keyProtectInfo.BindingFrom.Name, "Error", err)

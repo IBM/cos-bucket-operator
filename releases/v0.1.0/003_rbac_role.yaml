@@ -77,6 +77,30 @@ rules:
   - patch
   - delete
 - apiGroups:
+  - ibmcloud.ibm.com
+  resources:
+  - bindings
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ibmcloud.ibm.com
+  resources:
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
   - admissionregistration.k8s.io
   resources:
   - mutatingwebhookconfigurations

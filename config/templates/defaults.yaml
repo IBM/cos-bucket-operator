@@ -12,7 +12,27 @@ crd:
             "kind": "Bucket",
             "metadata": {
             "name": "cos4seed-bucket-m2c711"
+            },
+        "spec": {
+            "apiKey": {
+              "secretKeyRef": {
+                "name": "cos4seed-hmac",
+                "key": "apikey"
+              }
+            },
+            "resourceInstanceID": {
+              "secretKeyRef": {
+                "name": "cos4seed-hmac",
+                "key": "resource_instance_id"
+              }
+            },
+            "endpoints": {
+              "configMapKeyRef": {
+                "name": "cos4seed-hmac",
+                "key": "endpoints"
+              }
             }
+         }
         }
       resources:
         - kind: Secret
@@ -26,15 +46,75 @@ crd:
           displayName: API Key
           path: apiKey
           x-descriptors:
-            - 'urn:alm:descriptor:text'   
-        - description: Endpoints
+            - 'urn:alm:descriptor:text'
+        - description: API KEY in Secret
+          displayName: secretKeyRef
+          path: apiKey/secretKeyRef
+          x-descriptor:
+            - 'urn:alm:descriptor:com.tectonic.ui:selector:core:v1:Secret'
+        - description: Bind to existing bucket, can be used to control Retention rule and CORS policy
+          displayName: Bind Only
+          path: bindOnly
+          x-descriptors:
+            - 'urn:alm:descriptor:text' 
+        - description: Use bindingFrom if using IBM Cloud Operators to control service and binding
+          displayName: Binding From
+          path: bindingFrom
+          x-descriptors:
+            - 'urn:alm:descriptor:text'
+        - description: Type of Bucket - Public or Private. Default to public
+          displayName: Bucket Type
+          path: bucketType
+          x-descriptors:
+            - 'urn:alm:descriptor:text'
+        - description : Context of the operator
+          displayName: Context
+          path: context
+          x-descriptors:
+            - 'urn:alm:descriptor:text'
+        - description: CORS rule - allowedOrigin, allowedHeader and allowedMethod
+          displayName: CORS rule
+          path: corsRules
+          x-descriptors:
+            - 'urn:alm:descriptor:text'
+        - description: Endpoints - can be found in the instance service crentials 
           displayName: Endpoints
           path: endpoints
           x-descriptors:
-            - 'urn:alm:descriptor:text'  
-        - description: Resource Instance ID
+            - 'urn:alm:descriptor:text' 
+        - description: Do not remove the bucket if it is not empty
+          displayName: Keep If Not Empty
+          path: keepIfNotEmpty
+          x-descriptors:
+            - 'urn:alm:descriptor:text' 
+        - description: Location of the bucket
+          displayName: Location
+          path: location
+          x-descriptors:
+            - 'urn:alm:descriptor:text'
+        - description: Region of the bucket
+          displayName: Region
+          path: region
+          x-descriptors:
+            - 'urn:alm:descriptor:text'
+        - description: Bucket Resiliency - Cross Region, Regional, Single Site
+          displayName: Resiliency
+          path: resiliency
+          x-descriptors:
+            - 'urn:alm:descriptor:text'
+        - description: Retention policy - Only available for the standard plan Cloud Object Storage instance
+          displayName: Retention policy
+          path: retentionPolicy
+          x-descriptors:
+            - 'urn:alm:descriptor:text'
+        - description: Resource Instance ID of the COS Instance, can be fonud in the Service Credentials
           displayName: Resource Instance ID
           path: resourceInstanceID
+          x-descriptors:
+            - 'urn:alm:descriptor:text'
+        - description: Bucket Storage Class - Standard, Vault, Cold Vault, and Flex
+          displayName: Storage Class
+          path: storageClass
           x-descriptors:
             - 'urn:alm:descriptor:text'
       statusDescriptors:
@@ -42,34 +122,9 @@ crd:
           displayName: Message
           path: message
           x-descriptors:
-            - 'urn:alm:descriptor:text'    
-        - description: Current plan for service
-          displayName: Plan
-          path: plan
-          x-descriptors:
-            - 'urn:alm:descriptor:text'   
-        - description: Current service class
-          displayName: Service Class
-          path: serviceClass
-          x-descriptors:
-            - 'urn:alm:descriptor:text'   
-        - description: Indicates if IAM type or legacy
-          displayName: Service Class Type
-          path: serviceClassType
-          x-descriptors:
-            - 'urn:alm:descriptor:text'  
+            - 'urn:alm:descriptor:text'     
         - description: Current state for the service
           displayName: State
           path: state
           x-descriptors:
-            - 'urn:alm:descriptor:text'    
-        - description: Current context for the service (resorce group, region, org, space)
-          displayName: Context
-          path: context
-          x-descriptors:
-            - 'urn:alm:descriptor:text'   
-        - description: Instance ID for the service
-          displayName: Instance ID
-          path: instanceId
-          x-descriptors:
-            - 'urn:alm:descriptor:text'      
+            - 'urn:alm:descriptor:text'          

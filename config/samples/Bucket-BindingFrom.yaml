@@ -1,0 +1,18 @@
+apiVersion: ibmcloud.ibm.com/v1alpha1
+kind: Bucket
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: cos4seedb-bucket-jadeyliu-m2c719
+  namespace: cos-bucket-operator
+spec:
+  bindingFrom: 
+    name: cos4seed-manual
+    namespace: cos-bucket-operator
+  corsRules:
+    allowedOrigin : "w1.ibm.com"
+    allowedHeader : "*"
+    allowedMethods :
+      - PUT
+      - POST
+      - GET

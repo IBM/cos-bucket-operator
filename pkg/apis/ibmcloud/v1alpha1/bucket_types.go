@@ -68,8 +68,9 @@ type KeyProtectInfo struct {
 
 // KeyReference name value pair
 type KeyReference struct {
-	Name string `json:"name"`
-	Key  string `json:"key"`
+	Name      string `json:"name"`
+	Key       string `json:"key"`
+	Namespace string `json:"namespace,omitempty"`
 }
 
 // CORSRule Rules for CORS
