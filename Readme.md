@@ -23,7 +23,7 @@ kind: Bucket
 
 * Bucket operator can be used independent of the [IBM Cloud Operators](https://github.com/ibm/cloud-operators). 
   * Using Binding object: Please reference to the [IBM Cloud Operators](https://github.com/ibm/cloud-operators) for installation detail and please see the [sample service and binding yaml](#sampleYaml).
-  * To use bucket operator independently, user needs to provide the following information thru kubernetes secrets or configmap. (see [section 2](#section2) for schema information). The `apiKey` field in the IBM Cloud Object Storage's service credentail can be used instead of IBM Cloud API Key. 
+  * To use bucket operator independently, user needs to provide the following information thru kubernetes secrets or configmap. (see [section 2](#section2) for schema information). The `apiKey` field in the IBM Cloud Object Storage's service credential can be used instead of IBM Cloud API Key. 
     1. apiKey
 
           Specification:
@@ -56,7 +56,7 @@ kind: Bucket
     3. resourece_instance_id - from the Cloud Object Storage Credentials.
 
 * If the bucket was removed outside of the Lifecycle of the controller, the bucket will be created with name plus different random strings at the end
-* Object inside Bucket will be removed when the deleting the controller, KeepIfNotEmpty flag can be used to avoid accidentally removing of non-empty bucket. With this flag, the Deleting action will fail and will stay in "Deleting" status, until user manual remove the object(s) inside the bucket. Or remove the KeepIfNotEmpty flag from the yaml spec and use `kubectl apply` to change the desired action.
+* Object inside Bucket will be removed when deleting the controller, KeepIfNotEmpty flag can be used to avoid accidentally removing of non-empty bucket. With this flag, the Deleting action will fail and will stay in "Deleting" status, until user manual remove the object(s) inside the bucket. Or remove the KeepIfNotEmpty flag from the yaml spec and use `kubectl apply` to change the desired action.
 * The location, resiliency cannot be changed without removing and recreating the bucket.
 * The CORS rules and RetentionPolicy can be changed by using "kubectl apply" (Note: RetentionPolicy (a.k.a Protection) is supported in plan `standard` only )
 * `bindOnly` is used to bind to existing bucket. You can also use this to change the cors rule and retention policy of existing bucket. Removing the binconly CR will not remove the bucket, but the original CORS rule and Policy will be restored. `Note: Once you create a retention policy it can not be deleted.` To understand the `Retention Policy`, please reference [Immutable Object Storage](https://cloud.ibm.com/docs/services/cloud-object-storage/basics?topic=cloud-object-storage-immutable)  
@@ -330,7 +330,7 @@ script to create both ibmcloud api key and kubernetes secret (replace <APIKeyNam
 ibmcloud iam api-key-create <ApiKeyName> | awk '$1 ~ /API/ && $2 ~ /Key/ { print("apiKey="$3) }' > /tmp/ibmcloudapi.key
 k create secret generic <SecretName> --type=Secret --from-env-file=/tmp/ibmcloudapi.key
 ```
-Once the secret is created you can add the spec as the following ( SecretName is ibmcloudapiKey)
+Once the secret is created you can add the spec as the following (SecretName is ibmcloudapiKey)
 
 ```
 keyProtect:
