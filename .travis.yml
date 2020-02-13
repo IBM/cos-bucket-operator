@@ -15,9 +15,7 @@ before_install:
   - source ./hack/latest_tag
   - ./tools/travis/k8s-tools.sh
   - if [ ! -z "$BLUEMIX_API_KEY" ]; then ./tools/travis/set-kube-config.sh; fi
-  - if [ ! -z "$BLUEMIX_API_KEY" ]; then ./tools/travis/bx-install.sh; fi
-  - if [ ! -z "$BLUEMIX_API_KEY" ]; then ./tools/travis/bx-setup.sh; fi
-
+  
 script:
   - make generate
   - make lintall
@@ -31,7 +29,6 @@ after_success:
 branches:
   only: 
     - master
-    - KeyProtect
     - /^[0-9]+\..*$/
     - /^v[0-9]+\..*$/
     - /^release-[0-9]+\..*$/
