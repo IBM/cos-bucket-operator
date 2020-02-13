@@ -1,6 +1,6 @@
 
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= cloudoperators/cosbucket-operator
 
 all: test manager
 
@@ -54,14 +54,17 @@ endif
 	go generate ./pkg/... ./cmd/...
 
 # Build the docker image
-docker-build: test
-	docker build . -t ${IMG}
+docker-build: check-tag
+	git rev-parse --short HEAD > git-rev
+	docker build . -t ${IMG}:${TAG}
+	rm git-rev
 	@echo "updating kustomize image patch file for manager resource"
-	sed -i'' -e 's@image: .*@image: '"${IMG}"'@' ./config/default/manager_image_patch.yaml
+	sed -i'' -e 's@image: .*@image: '"${IMG}:${TAG}"'@' ./config/default/manager_image_patch.yaml
 
 # Push the docker image
-docker-push:
-	docker push ${IMG}
+docker-push: check-tag
+	echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
+	docker push ${IMG}:${TAG}
 
 # Run the operator-sdk scorecard on latest release
 scorecard:
