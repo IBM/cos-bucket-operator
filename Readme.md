@@ -45,15 +45,15 @@ kind: Bucket
 
               Use ibmcloud cli to create a new IBM Cloud API Key - `ibmcloud iam api-key-create <APIKeyName>`
 
-              Please see [Understanding IBM Cloud API Key](https://cloud.ibm.com/docs/iam?topic=iam-manapiKey)
-              Refer to [Example Script](#ibmcloudapiKey) for how to create ibmcloud api key and use it to create kubernetes secret
+          Please see [Understanding IBM Cloud API Key](https://cloud.ibm.com/docs/iam?topic=iam-manapiKey)
+          and refer to [Example Script](#ibmcloudapiKey) for how to create ibmcloud api key and use it to create kubernetes secret
 
         + option 3. use an existing IBM Cloud API Key - create either a kubernetes secret or configmap. 
             And then use the following spec to specify where to locate the apiKey
             
     2. endpoints - from the Cloud Object Storage credentials. Please see [Section 3](#section3)
 
-    3. resourece_instance_id - from the Cloud Object Storage Credentials.
+    3. resourceInstanceID - from the Cloud Object Storage Credentials.
 
 * If the bucket was removed outside of the Lifecycle of the controller, the bucket will be created with name plus different random strings at the end
 * Object inside Bucket will be removed when deleting the controller, KeepIfNotEmpty flag can be used to avoid accidentally removing of non-empty bucket. With this flag, the Deleting action will fail and will stay in "Deleting" status, until user manual remove the object(s) inside the bucket. Or remove the KeepIfNotEmpty flag from the yaml spec and use `kubectl apply` to change the desired action.
@@ -65,7 +65,7 @@ The spec "apiKey" under KeyProtect should be pointing to the kubernets secret or
 
 ### <a name="section2"></a>2. Bucket Controller Schema
 
-The Credentials field inside Spec should contains three needed information about where to retrieve the values of `resource_instance_id`, `apiKey`, and `endpoints`.
+The Credentials field inside Spec should contains three needed information about where to retrieve the values of `resourceInstanceID`, `apiKey`, and `endpoints`.
 If no keys is defined in the spec of either bindingRef, secretKeyRef or configMapKeyRef, then the operators will try to find all 3 values from it.
 If there are duplicate key specified for more than one Ref, the latter one will overwrite the value in the previous one. The sequence is configMapRef > secretKeyRef > bindingRef. 
 ```
@@ -77,7 +77,7 @@ spec:
   # if using ibmcloud operator, use only bindingFrom
   bindingFrom:
     name: <name of the binding CR>
-  # if not using ibmcloud operator, please specify apiKey, resource_instance_id and endpoints from the COS service credentails
+  # if not using ibmcloud operator, please specify apiKey, resourceInstanceID and endpoints from the COS service credentails
   apiKey:  
     # Only required either secretKeyRef or configMapKeyRef>
     secretKeyRef:
@@ -93,7 +93,7 @@ spec:
     configMapKeyRef:
       name: <name of the configmap>
       key: <the name of the key inside configmap identified by name>
-  resource_instance_id: <Only required either secretKeyRef or configMapKeyRef>
+  rresourceInstanceID: <Only required either secretKeyRef or configMapKeyRef>
     secretKeyRef: 
       name: <name of the kubernetes secret>
       key: <the name of the key inside secret identified by name>
@@ -132,7 +132,7 @@ spec:
     minimumRetentionDay: <integer>
 
 ```
-#### - Example : Using BindingFrom all required values
+#### - Example : Using BindingFrom for ll required values
 ```
 apiVersion: ibmcloud.ibm.com/v1alpha1
 kind: Bucket
@@ -161,7 +161,7 @@ spec:
 ```
 #### - Example: Not using ibmcloud operators
 
-IBM Cloud API Key is stored in Secret:secret4bucket with key:APIKey, resource_instance_id is stored in Secret:cos4seedb with key=resource_instance_id, endpoints is stored in Config Map: cos4seedbm with key=endpoints
+IBM Cloud API Key is stored in Secret:secret4bucket with key:APIKey, ResourceInstanceID is stored in Secret:cos4seedb with key=resource_instance_id, endpoints is stored in Config Map: cos4seedbm with key=endpoints
 ```
 apiVersion: ibmcloud.ibm.com/v1alpha1
 kind: Bucket
@@ -174,7 +174,7 @@ spec:
     secretKeyRef:
       name: secret4bucket
       key: APIKey
-  resource_instance_id:
+  resourceInstanceID:
     secretKeyRef:
       name: cos4seedb
       key: resource_instance_id
@@ -185,6 +185,9 @@ spec:
   bucketname: cos4seedb-bucket-014
   ```
 #### - Using Key Protect to encrypt objects in a bucket.
+
+User can specify the KeyProtect instance by using instanceName or instanceID. To find the instanceID, please use `ibmcloud resources service-instance <instanceName> -id`
+
   ```
   apiVersion: ibmcloud.ibm.com/v1alpha1
   kind: Bucket
@@ -197,7 +200,7 @@ spec:
       secretKeyRef:
         name: ibmcloudapikey
         key: apikey
-    resource_instance_id:
+    resourceInstanceID:
       secretKeyRef:
         name: cos4seedb
         key: resource_instance_id
@@ -262,7 +265,7 @@ spec:
     ibmcloud resource service-instance <instance name> -id
 ```
 
-take note of the ID ( in the format of xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx ) of the instance you want to use
+take note of the ID ( in the format of xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx ) of the instance you want to use and then 
 add the ID or Name to the Bucket spec for keyProtect
 
 example:
@@ -306,7 +309,7 @@ Example Yaml file
         controller-tools.k8s.io: "1.0"
       name: cos4seedb-bucket-jadeyliu-m2c711
     spec:
-      resource_instance_id:
+      resourceInstanceID:
         secretKeyRef:
           name: cos4seedb
           key: resource_instance_id
@@ -319,6 +322,10 @@ Example Yaml file
         bindingFrom:
           name: keyprotect4cosa
         keyName: forcos4seedb
+        apiKey:
+          secretKeyRef:
+            name: ibmcloudapiKey
+            key: apiKey
 ```
 
 #### <a name="ibmcloudapiKey"></a>D. Create IBM Cloud API Key for KeyProtect Key creation

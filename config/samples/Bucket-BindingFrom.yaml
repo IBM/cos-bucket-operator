@@ -8,7 +8,6 @@ metadata:
 spec:
   bindingFrom: 
     name: cos4seed-manual
-    namespace: cos-bucket-operator
   corsRules:
     allowedOrigin : "w1.ibm.com"
     allowedHeader : "*"
